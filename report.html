@@ -1,0 +1,1930 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CDN Request Comparator</title>
+<style>
+  :root{
+    --bg: #0B1116;
+    --panel: #111A21;
+    --panel-2: #0E161C;
+    --line: #1E2A33;
+    --text: #E7EDF1;
+    --muted: #7C93A0;
+    --cache: #35D0B0;
+    --origin: #FF9955;
+    --old: #8CA3B0;
+    --new: #4FC3F7;
+    --diffup: #FF6B6B;
+    --diffdown: #35D0B0;
+    --danger: #FF6B6B;
+    --mono: "JetBrains Mono", "SF Mono", "Consolas", monospace;
+    --sans: "Inter", -apple-system, "Segoe UI", sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body{
+    margin:0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    padding: 32px 20px 60px;
+    min-height: 100vh;
+  }
+  .wrap{ max-width: 1180px; margin: 0 auto; }
+
+  .eyebrow{
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--cache);
+    margin-bottom: 6px;
+  }
+  h1{ font-size: 26px; font-weight: 700; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub{ color: var(--muted); font-size: 13.5px; margin-bottom: 26px; max-width: 680px; }
+
+  .layout{
+    display: grid;
+    grid-template-columns: 240px 1fr;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 900px){ .layout{ grid-template-columns: 1fr; } }
+
+  .sidebar{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 16px;
+    position: sticky;
+    top: 20px;
+  }
+  .sidebar h3{
+    font-family: var(--mono);
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    margin: 0 0 12px;
+  }
+  .name-chip{
+    display:flex;
+    align-items:center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 9px 10px;
+    border-radius: 6px;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: border-color .15s ease;
+  }
+  .name-chip:hover{ border-color: var(--new); }
+  .name-chip.active{ border-color: var(--cache); }
+  .name-chip .nm{
+    font-size: 12.5px;
+    font-weight: 600;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .name-chip .meta{
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--muted);
+  }
+  .name-chip .del{
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 15px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 2px 4px;
+    flex-shrink: 0;
+  }
+  .name-chip .del:hover{ color: var(--danger); }
+  .empty-note{
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .panel{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 20px;
+    margin-bottom: 22px;
+  }
+  label{
+    display:flex; align-items:center; gap: 8px;
+    font-family: var(--mono); font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px;
+  }
+  .dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .dot.old{ background: var(--old); }
+  .dot.new{ background: var(--new); }
+
+  input[type="text"]{
+    width:100%; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 6px; color: var(--text); font-family: var(--sans);
+    font-size: 14px; padding: 10px 12px; margin-bottom: 18px; outline: none;
+    transition: border-color .15s ease;
+  }
+  input[type="text"]:focus{ border-color: var(--new); }
+
+  .json-grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  @media (max-width: 780px){ .json-grid{ grid-template-columns: 1fr; } }
+
+  textarea{
+    width:100%; min-height: 160px; background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 6px; color: var(--text); font-family: var(--mono); font-size: 12px;
+    line-height: 1.5; padding: 12px; resize: vertical; outline: none;
+    transition: border-color .15s ease;
+  }
+  textarea:focus{ border-color: var(--new); }
+
+  .row{ display:flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; align-items:center; }
+  button{
+    font-family: var(--sans); font-size: 13.5px; font-weight: 600; padding: 10px 18px;
+    border-radius: 6px; border: none; cursor: pointer;
+    transition: transform .1s ease, opacity .15s ease;
+  }
+  button:active{ transform: scale(0.98); }
+  button:disabled{ opacity: 0.4; cursor: not-allowed; }
+  .btn-primary{ background: var(--cache); color: #06231C; }
+  .btn-primary:hover{ opacity: 0.9; }
+  .btn-save{ background: var(--new); color: #06232E; }
+  .btn-save:hover{ opacity: 0.9; }
+  .btn-ghost{ background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  .btn-ghost:hover{ color: var(--text); border-color: var(--muted); }
+
+  .save-status{
+    font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+  }
+  .save-status.ok{ color: var(--cache); }
+  .save-status.err{ color: var(--danger); }
+
+  .error{
+    display:none; color: var(--danger); font-family: var(--mono); font-size: 12.5px;
+    background: rgba(255,107,107,0.08); border: 1px solid rgba(255,107,107,0.35);
+    border-radius: 6px; padding: 10px 12px; margin-top: 14px; white-space: pre-wrap;
+  }
+
+  .result{ display:none; }
+  .result-header{
+    display:flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 14px; flex-wrap: wrap; gap: 8px;
+  }
+  .result-title{ font-size: 17px; font-weight: 700; }
+  .result-meta{ font-family: var(--mono); font-size: 11.5px; color: var(--muted); }
+
+  .stats{ display:grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 20px; }
+  @media (max-width: 780px){ .stats{ grid-template-columns: 1fr 1fr; } }
+  .stat{ background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; }
+  .stat .label{ font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 6px; }
+  .stat .value{ font-family: var(--mono); font-size: 18px; font-weight: 700; }
+  .stat .sub-vals{ font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .stat .sub-vals .o{ color: var(--old); }
+  .stat .sub-vals .n{ color: var(--new); }
+  .stat.diff-up .value{ color: var(--diffup); }
+  .stat.diff-down .value{ color: var(--diffdown); }
+  .stat.diff-flat .value{ color: var(--text); }
+
+  .chart-panel{
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px; margin-bottom: 20px;
+  }
+  .chart-head{ display:flex; justify-content: space-between; align-items:center; margin-bottom: 12px; flex-wrap: wrap; gap: 10px; }
+  .chart-title{ font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .metric-tabs{ display:flex; gap: 6px; }
+  .metric-tab{
+    font-family: var(--mono); font-size: 11px; padding: 6px 12px; border-radius: 5px;
+    border: 1px solid var(--line); background: var(--panel-2); color: var(--muted); cursor: pointer;
+  }
+  .metric-tab.active{ border-color: var(--cache); color: var(--text); }
+  .chart-legend{ display:flex; gap: 16px; font-family: var(--mono); font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .chart-legend span{ display:flex; align-items:center; gap:6px; }
+  .chart-legend .sw{ width: 14px; height: 2px; display:inline-block; }
+
+  .table-wrap{
+    overflow-x: auto; background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 18px;
+  }
+  table{ width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 12.5px; }
+  thead th{
+    text-align: right; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+    color: var(--muted); font-weight: 600; padding: 6px 8px; border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+  }
+  thead tr.group-row th{ font-size: 10.5px; color: var(--text); padding-top: 10px; border-bottom: none; }
+  thead th:first-child, thead td:first-child{ text-align: left; }
+  thead th.grp-total{ color: var(--text); }
+  thead th.grp-origin{ color: var(--origin); }
+  thead th.grp-cdn{ color: var(--cache); }
+  thead th.sep-left{ border-left: 1px solid var(--line); }
+
+  tbody td{ text-align: right; padding: 8px 8px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  tbody td:first-child{ text-align: left; color: var(--text); font-family: var(--sans); font-size: 12px; font-weight: 600; }
+  tbody tr:hover{ background: rgba(255,255,255,0.02); }
+  td.old{ color: var(--old); }
+  td.new{ color: var(--new); }
+  td.diff{ font-weight: 700; }
+  td.diff.up{ color: var(--diffup); }
+  td.diff.down{ color: var(--diffdown); }
+  td.diff.flat{ color: #3E4C56; }
+  td.zero{ color: #3E4C56; }
+  td.sep-left{ border-left: 1px solid var(--line); }
+  td.new-day{ position: relative; }
+  td.new-day:first-child::after{
+    content: '●'; color: var(--cache); font-size: 6px; margin-left: 6px; vertical-align: middle;
+  }
+
+  tfoot td{ padding: 10px 8px; font-weight: 700; border-top: 1px solid var(--line); border-bottom: none; }
+  tfoot td:first-child{ color: var(--text); font-family: var(--sans); font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; }
+
+  .export-row{ display:flex; gap:10px; margin-top: 16px; }
+  .legend{
+    display:flex; gap: 18px; align-items:center; font-family: var(--mono); font-size: 11px;
+    color: var(--muted); margin-bottom: 14px; flex-wrap: wrap;
+  }
+  .legend span{ display:flex; align-items:center; gap:6px; }
+  .legend .sw{ width:10px; height:10px; border-radius:2px; display:inline-block; }
+
+  ::placeholder{ color: #435159; }
+
+  .page-tabs{ display:flex; gap: 8px; margin-bottom: 24px; border-bottom: 1px solid var(--line); }
+  .tab-btn{
+    background: none; border: none; color: var(--muted); font-family: var(--sans);
+    font-size: 14px; font-weight: 600; padding: 10px 4px; margin-right: 18px;
+    cursor: pointer; border-bottom: 2px solid transparent; border-radius: 0;
+  }
+  .tab-btn.active{ color: var(--text); border-bottom-color: var(--cache); }
+  .tab-content{ display: none; }
+  .tab-content.active{ display: block; }
+
+  .stats-dyn{ display:grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin-bottom: 20px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">Data Comparator</div>
+  <h1>Domain Data → So sánh Old / New</h1>
+  <div class="sub">Dán JSON OLD/NEW để so sánh theo ngày. Lưu theo Name để lần sau upload dữ liệu ở khoảng ngày khác, biểu đồ và bảng sẽ tự nối dài — ngày trùng nhau sẽ không bị lặp lại.</div>
+
+  <div class="page-tabs">
+    <button class="tab-btn active" data-tab="tabRequest" onclick="switchTab('tabRequest')">Request (Total/Origin/CDN)</button>
+    <button class="tab-btn" data-tab="tabStatus" onclick="switchTab('tabStatus')">HTTP Status Code</button>
+    <button class="tab-btn" data-tab="tabTransaction" onclick="switchTab('tabTransaction')">HTTP Transaction</button>
+  </div>
+
+  <div class="tab-content active" id="tabRequest">
+  <div class="layout">
+
+    <div class="sidebar">
+      <h3>Đã lưu theo Name</h3>
+      <div id="savedList"></div>
+      <div class="empty-note" id="emptyNote">Chưa có dữ liệu nào được lưu.</div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <label for="nameInput">Name</label>
+        <input type="text" id="nameInput" placeholder="VD: Domain ABC - So sánh cấu hình cũ và mới" />
+
+        <div class="json-grid">
+          <div>
+            <label><span class="dot old"></span> JSON Data — OLD</label>
+            <textarea id="oldInput" placeholder='Dán JSON của bản OLD vào đây...'></textarea>
+          </div>
+          <div>
+            <label><span class="dot new"></span> JSON Data — NEW</label>
+            <textarea id="newInput" placeholder='Dán JSON của bản NEW vào đây...'></textarea>
+          </div>
+        </div>
+
+        <div class="row">
+          <button class="btn-primary" onclick="convert()">So sánh</button>
+          <button class="btn-save" id="saveBtn" onclick="saveCurrent()" disabled>Lưu vào Name này</button>
+          <button class="btn-ghost" onclick="loadSample()">Dùng dữ liệu mẫu</button>
+          <button class="btn-ghost" onclick="clearInputs()">Xóa ô nhập</button>
+          <span class="save-status" id="saveStatus"></span>
+        </div>
+
+        <div class="error" id="errorBox"></div>
+      </div>
+
+      <div class="result" id="result">
+        <div class="result-header">
+          <div class="result-title" id="resultTitle">Kết quả</div>
+          <div class="result-meta" id="resultMeta"></div>
+        </div>
+
+        <div class="legend">
+          <span><span class="sw" style="background:var(--old)"></span> Old</span>
+          <span><span class="sw" style="background:var(--new)"></span> New</span>
+          <span><span class="sw" style="background:var(--diffup)"></span> New cao hơn Old</span>
+          <span><span class="sw" style="background:var(--diffdown)"></span> New thấp hơn Old</span>
+          <span><span class="sw" style="background:var(--cache);border-radius:50%;width:6px;height:6px;"></span> Ngày mới thêm khi lưu</span>
+        </div>
+
+        <div class="stats">
+          <div class="stat" id="stTotal">
+            <div class="label">Total Request — Δ (New − Old)</div>
+            <div class="value" id="statTotalDiff">0</div>
+            <div class="sub-vals"><span class="o" id="statTotalOld">Old: 0</span> &nbsp;/&nbsp; <span class="n" id="statTotalNew">New: 0</span></div>
+          </div>
+          <div class="stat" id="stOrigin">
+            <div class="label">Origin Request — Δ (New − Old)</div>
+            <div class="value" id="statOriginDiff">0</div>
+            <div class="sub-vals"><span class="o" id="statOriginOld">Old: 0</span> &nbsp;/&nbsp; <span class="n" id="statOriginNew">New: 0</span></div>
+          </div>
+          <div class="stat" id="stCdn">
+            <div class="label">CDN Request — Δ (New − Old)</div>
+            <div class="value" id="statCdnDiff">0</div>
+            <div class="sub-vals"><span class="o" id="statCdnOld">Old: 0</span> &nbsp;/&nbsp; <span class="n" id="statCdnNew">New: 0</span></div>
+          </div>
+          <div class="stat" id="stDays">
+            <div class="label">Ngày lệch dữ liệu</div>
+            <div class="value" id="statMismatchDays">0</div>
+            <div class="sub-vals">trên tổng số ngày</div>
+          </div>
+        </div>
+
+        <div class="chart-panel">
+          <div class="chart-head">
+            <div class="chart-title">Biểu đồ theo thời gian</div>
+            <div class="metric-tabs">
+              <button class="metric-tab active" data-metric="Total" onclick="setMetric('Total')">Total</button>
+              <button class="metric-tab" data-metric="Origin" onclick="setMetric('Origin')">Origin</button>
+              <button class="metric-tab" data-metric="Cdn" onclick="setMetric('Cdn')">CDN</button>
+            </div>
+          </div>
+          <div id="chartContainer"></div>
+          <div class="chart-legend">
+            <span><span class="sw" style="background:var(--old)"></span> Old</span>
+            <span><span class="sw" style="background:var(--new)"></span> New</span>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr class="group-row">
+                <th></th>
+                <th class="grp-total sep-left" colspan="3">Total Request</th>
+                <th class="grp-origin sep-left" colspan="3">Origin Request</th>
+                <th class="grp-cdn sep-left" colspan="3">CDN Request</th>
+              </tr>
+              <tr>
+                <th>Ngày</th>
+                <th class="sep-left">Old</th><th>New</th><th>Δ</th>
+                <th class="sep-left">Old</th><th>New</th><th>Δ</th>
+                <th class="sep-left">Old</th><th>New</th><th>Δ</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+            <tfoot id="tableFoot"></tfoot>
+          </table>
+        </div>
+
+        <div class="export-row">
+          <button class="btn-ghost" onclick="copyCSV()">Copy CSV</button>
+          <button class="btn-ghost" onclick="copyMarkdown()">Copy Markdown</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  </div>
+
+  <div class="tab-content" id="tabStatus">
+  <div class="layout">
+
+    <div class="sidebar">
+      <h3>Đã lưu theo Name</h3>
+      <div id="savedListStatus"></div>
+      <div class="empty-note" id="emptyNoteStatus">Chưa có dữ liệu nào được lưu.</div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <label for="nameInputStatus">Name</label>
+        <input type="text" id="nameInputStatus" placeholder="VD: Domain ABC - So sánh HTTP status" />
+
+        <div class="json-grid">
+          <div>
+            <label><span class="dot old"></span> JSON Data — OLD</label>
+            <textarea id="oldInputStatus" placeholder='Dán JSON HTTP status của bản OLD vào đây...'></textarea>
+          </div>
+          <div>
+            <label><span class="dot new"></span> JSON Data — NEW</label>
+            <textarea id="newInputStatus" placeholder='Dán JSON HTTP status của bản NEW vào đây...'></textarea>
+          </div>
+        </div>
+
+        <div class="row">
+          <button class="btn-primary" onclick="convertStatus()">So sánh</button>
+          <button class="btn-save" id="saveBtnStatus" onclick="saveCurrentStatus()" disabled>Lưu vào Name này</button>
+          <button class="btn-ghost" onclick="loadSampleStatus()">Dùng dữ liệu mẫu</button>
+          <button class="btn-ghost" onclick="clearInputsStatus()">Xóa ô nhập</button>
+          <span class="save-status" id="saveStatusStatus"></span>
+        </div>
+
+        <div class="error" id="errorBoxStatus"></div>
+      </div>
+
+      <div class="result" id="resultStatus">
+        <div class="result-header">
+          <div class="result-title" id="resultTitleStatus">Kết quả</div>
+          <div class="result-meta" id="resultMetaStatus"></div>
+        </div>
+
+        <div class="legend">
+          <span><span class="sw" style="background:var(--old)"></span> Old</span>
+          <span><span class="sw" style="background:var(--new)"></span> New</span>
+          <span><span class="sw" style="background:var(--diffup)"></span> New cao hơn Old</span>
+          <span><span class="sw" style="background:var(--diffdown)"></span> New thấp hơn Old</span>
+          <span><span class="sw" style="background:var(--cache);border-radius:50%;width:6px;height:6px;"></span> Ngày mới thêm khi lưu</span>
+        </div>
+
+        <div class="stats-dyn" id="statsStatus"></div>
+
+        <div class="chart-panel">
+          <div class="chart-head">
+            <div class="chart-title">Biểu đồ theo thời gian</div>
+            <div class="metric-tabs" id="metricTabsStatus"></div>
+          </div>
+          <div id="chartContainerStatus"></div>
+          <div class="chart-legend">
+            <span><span class="sw" style="background:var(--old)"></span> Old</span>
+            <span><span class="sw" style="background:var(--new)"></span> New</span>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead id="tableHeadStatus"></thead>
+            <tbody id="tableBodyStatus"></tbody>
+            <tfoot id="tableFootStatus"></tfoot>
+          </table>
+        </div>
+
+        <div class="export-row">
+          <button class="btn-ghost" onclick="copyCSVStatus()">Copy CSV</button>
+          <button class="btn-ghost" onclick="copyMarkdownStatus()">Copy Markdown</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  </div>
+
+  <div class="tab-content" id="tabTransaction">
+  <div class="layout">
+
+    <div class="sidebar">
+      <h3>Đã lưu theo Name</h3>
+      <div id="savedListTx"></div>
+      <div class="empty-note" id="emptyNoteTx">Chưa có dữ liệu nào được lưu.</div>
+    </div>
+
+    <div>
+      <div class="panel">
+        <label for="nameInputTx">Name</label>
+        <input type="text" id="nameInputTx" placeholder="VD: Domain ABC - So sánh HTTP Transaction" />
+
+        <div class="json-grid">
+          <div>
+            <label><span class="dot old"></span> JSON Data — OLD</label>
+            <textarea id="oldInputTx" placeholder='Dán JSON HTTP Transaction của bản OLD vào đây...'></textarea>
+          </div>
+          <div>
+            <label><span class="dot new"></span> JSON Data — NEW</label>
+            <textarea id="newInputTx" placeholder='Dán JSON HTTP Transaction của bản NEW vào đây...'></textarea>
+          </div>
+        </div>
+
+        <div class="row">
+          <button class="btn-primary" onclick="convertTx()">So sánh</button>
+          <button class="btn-save" id="saveBtnTx" onclick="saveCurrentTx()" disabled>Lưu vào Name này</button>
+          <button class="btn-ghost" onclick="loadSampleTx()">Dùng dữ liệu mẫu</button>
+          <button class="btn-ghost" onclick="clearInputsTx()">Xóa ô nhập</button>
+          <span class="save-status" id="saveStatusTx"></span>
+        </div>
+
+        <div class="error" id="errorBoxTx"></div>
+      </div>
+
+      <div class="result" id="resultTx">
+        <div class="result-header">
+          <div class="result-title" id="resultTitleTx">Kết quả</div>
+          <div class="result-meta" id="resultMetaTx"></div>
+        </div>
+
+        <div class="legend">
+          <span><span class="sw" style="background:var(--old)"></span> Old</span>
+          <span><span class="sw" style="background:var(--new)"></span> New</span>
+          <span><span class="sw" style="background:var(--diffup)"></span> New cao hơn Old</span>
+          <span><span class="sw" style="background:var(--diffdown)"></span> New thấp hơn Old</span>
+          <span><span class="sw" style="background:var(--cache);border-radius:50%;width:6px;height:6px;"></span> Ngày mới thêm khi lưu</span>
+        </div>
+
+        <div class="stats-dyn" id="statsTx"></div>
+
+        <div class="chart-panel">
+          <div class="chart-head">
+            <div class="chart-title">Biểu đồ theo thời gian</div>
+            <div class="metric-tabs" id="metricTabsTx"></div>
+          </div>
+          <div id="chartContainerTx"></div>
+          <div class="chart-legend">
+            <span><span class="sw" style="background:var(--old)"></span> Old</span>
+            <span><span class="sw" style="background:var(--new)"></span> New</span>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead id="tableHeadTx"></thead>
+            <tbody id="tableBodyTx"></tbody>
+            <tfoot id="tableFootTx"></tfoot>
+          </table>
+        </div>
+
+        <div class="export-row">
+          <button class="btn-ghost" onclick="copyCSVTx()">Copy CSV</button>
+          <button class="btn-ghost" onclick="copyMarkdownTx()">Copy Markdown</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+  </div>
+</div>
+
+<script>
+let lastRows = [];       // currently displayed, derived rows
+let lastTotals = {};
+let currentMetric = 'Total';
+let currentName = '';
+let draftRawRows = null; // raw rows from most recent "So sánh" (not yet saved)
+let newDaysSinceSave = new Set(); // dates that are new relative to what's stored, for highlighting
+
+function fmt(n){ return Number(n || 0).toLocaleString('en-US'); }
+function fmtSigned(n){
+  const v = Number(n || 0);
+  const s = v.toLocaleString('en-US');
+  return v > 0 ? '+' + s : s;
+}
+function diffClass(n){ if(n > 0) return 'up'; if(n < 0) return 'down'; return 'flat'; }
+
+function switchTab(tab){
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === tab));
+}
+
+function fmtDate(iso){
+  try{
+    const d = new Date(iso);
+    if(isNaN(d.getTime())) return iso;
+    const dd = String(d.getUTCDate()).padStart(2,'0');
+    const mm = String(d.getUTCMonth()+1).padStart(2,'0');
+    const yy = d.getUTCFullYear();
+    return `${dd}/${mm}/${yy}`;
+  }catch(e){ return iso; }
+}
+
+function slugify(name){
+  return name.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'unnamed';
+}
+function storageKey(name){ return `dataset:${slugify(name)}`; }
+
+function showError(msg){
+  const box = document.getElementById('errorBox');
+  box.textContent = msg;
+  box.style.display = 'block';
+}
+function hideError(){ document.getElementById('errorBox').style.display = 'none'; }
+
+function setSaveStatus(msg, cls){
+  const el = document.getElementById('saveStatus');
+  el.textContent = msg;
+  el.className = 'save-status' + (cls ? ' ' + cls : '');
+}
+
+function extractPayload(raw, sideName){
+  let parsed;
+  try{ parsed = JSON.parse(raw); }
+  catch(e){ throw new Error(`JSON "${sideName}" không hợp lệ: ` + e.message); }
+
+  if(parsed && Array.isArray(parsed.arguments) && typeof parsed.arguments[0] === 'string'){
+    try{ parsed = JSON.parse(parsed.arguments[0]); }catch(e){ /* ignore */ }
+  }
+  let data = parsed.Data || parsed.data || parsed;
+  if(!data || !Array.isArray(data.label)){
+    throw new Error(`Dữ liệu "${sideName}": không tìm thấy mảng "label" (danh sách ngày).`);
+  }
+  if(!Array.isArray(data.items)){
+    throw new Error(`Dữ liệu "${sideName}": không tìm thấy mảng "items".`);
+  }
+  const totalItem = data.items.find(i => /total_request/i.test(i.label || ''));
+  const originItem = data.items.find(i => /origin_request/i.test(i.label || ''));
+  if(!totalItem || !originItem){
+    throw new Error(`Dữ liệu "${sideName}": thiếu "total_request_label" hoặc "origin_request_label" trong items.`);
+  }
+  return { labels: data.label, totals: totalItem.value || [], origins: originItem.value || [] };
+}
+
+// Build raw merged rows (date, oldTotal, oldOrigin, newTotal, newOrigin) from Old/New payload
+function buildRawRows(oldP, newP){
+  const oldMap = {};
+  oldP.labels.forEach((d,i) => { oldMap[d] = { total: oldP.totals[i]||0, origin: oldP.origins[i]||0 }; });
+  const newMap = {};
+  newP.labels.forEach((d,i) => { newMap[d] = { total: newP.totals[i]||0, origin: newP.origins[i]||0 }; });
+
+  const allDates = [...oldP.labels];
+  newP.labels.forEach(d => { if(!allDates.includes(d)) allDates.push(d); });
+  allDates.sort();
+
+  return allDates.map(date => {
+    const o = oldMap[date] || { total: 0, origin: 0 };
+    const n = newMap[date] || { total: 0, origin: 0 };
+    return { date, oldTotal: o.total, oldOrigin: o.origin, newTotal: n.total, newOrigin: n.origin };
+  });
+}
+
+function computeDerived(r){
+  const oldCdn = r.oldTotal - r.oldOrigin;
+  const newCdn = r.newTotal - r.newOrigin;
+  return {
+    date: r.date,
+    oldTotal: r.oldTotal, newTotal: r.newTotal, diffTotal: r.newTotal - r.oldTotal,
+    oldOrigin: r.oldOrigin, newOrigin: r.newOrigin, diffOrigin: r.newOrigin - r.oldOrigin,
+    oldCdn, newCdn, diffCdn: newCdn - oldCdn,
+    hasData: !!(r.oldTotal || r.oldOrigin || r.newTotal || r.newOrigin)
+  };
+}
+
+// Merge existing raw rows with new raw rows. On date collision, KEEP EXISTING (skip incoming duplicate).
+function mergeRawRows(existingRows, incomingRows){
+  const map = {};
+  const newlyAdded = [];
+  existingRows.forEach(r => { map[r.date] = r; });
+  incomingRows.forEach(r => {
+    if(!map[r.date]){
+      map[r.date] = r;
+      newlyAdded.push(r.date);
+    }
+  });
+  const merged = Object.values(map).sort((a,b) => a.date.localeCompare(b.date));
+  return { merged, newlyAdded };
+}
+
+function renderRows(rawRows, title, highlightDates){
+  const rows = rawRows.map(computeDerived).sort((a,b) => a.date.localeCompare(b.date));
+  const sum = (key) => rows.reduce((a,r)=>a+r[key],0);
+  const totals = {
+    oldTotal: sum('oldTotal'), newTotal: sum('newTotal'),
+    oldOrigin: sum('oldOrigin'), newOrigin: sum('newOrigin'),
+    oldCdn: sum('oldCdn'), newCdn: sum('newCdn')
+  };
+  totals.diffTotal = totals.newTotal - totals.oldTotal;
+  totals.diffOrigin = totals.newOrigin - totals.oldOrigin;
+  totals.diffCdn = totals.newCdn - totals.oldCdn;
+
+  const mismatchDays = rows.filter(r => r.hasData && (r.diffTotal !== 0 || r.diffOrigin !== 0 || r.diffCdn !== 0)).length;
+  const dataDays = rows.filter(r => r.hasData).length;
+
+  lastRows = rows;
+  lastTotals = totals;
+
+  document.getElementById('resultTitle').textContent = title;
+  document.getElementById('resultMeta').textContent = `${rows.length} ngày`;
+
+  document.getElementById('statTotalDiff').textContent = fmtSigned(totals.diffTotal);
+  document.getElementById('statTotalOld').textContent = 'Old: ' + fmt(totals.oldTotal);
+  document.getElementById('statTotalNew').textContent = 'New: ' + fmt(totals.newTotal);
+  document.getElementById('statOriginDiff').textContent = fmtSigned(totals.diffOrigin);
+  document.getElementById('statOriginOld').textContent = 'Old: ' + fmt(totals.oldOrigin);
+  document.getElementById('statOriginNew').textContent = 'New: ' + fmt(totals.newOrigin);
+  document.getElementById('statCdnDiff').textContent = fmtSigned(totals.diffCdn);
+  document.getElementById('statCdnOld').textContent = 'Old: ' + fmt(totals.oldCdn);
+  document.getElementById('statCdnNew').textContent = 'New: ' + fmt(totals.newCdn);
+  document.getElementById('statMismatchDays').textContent = `${mismatchDays} / ${dataDays}`;
+
+  ['stTotal','stOrigin','stCdn'].forEach((id, idx) => {
+    const key = ['diffTotal','diffOrigin','diffCdn'][idx];
+    const el = document.getElementById(id);
+    el.classList.remove('diff-up','diff-down','diff-flat');
+    el.classList.add('diff-' + (totals[key] > 0 ? 'up' : totals[key] < 0 ? 'down' : 'flat'));
+  });
+
+  const hl = highlightDates || new Set();
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = rows.map(r => {
+    const zeroCls = !r.hasData ? ' zero' : '';
+    const firstCellCls = hl.has(r.date) ? ' new-day' : '';
+    return `<tr>
+      <td class="${firstCellCls}">${fmtDate(r.date)}</td>
+      <td class="old sep-left${zeroCls}">${fmt(r.oldTotal)}</td>
+      <td class="new${zeroCls}">${fmt(r.newTotal)}</td>
+      <td class="diff ${diffClass(r.diffTotal)}">${fmtSigned(r.diffTotal)}</td>
+      <td class="old sep-left${zeroCls}">${fmt(r.oldOrigin)}</td>
+      <td class="new${zeroCls}">${fmt(r.newOrigin)}</td>
+      <td class="diff ${diffClass(r.diffOrigin)}">${fmtSigned(r.diffOrigin)}</td>
+      <td class="old sep-left${zeroCls}">${fmt(r.oldCdn)}</td>
+      <td class="new${zeroCls}">${fmt(r.newCdn)}</td>
+      <td class="diff ${diffClass(r.diffCdn)}">${fmtSigned(r.diffCdn)}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tableFoot').innerHTML = `<tr>
+    <td>Tổng</td>
+    <td class="sep-left">${fmt(totals.oldTotal)}</td><td>${fmt(totals.newTotal)}</td><td class="diff ${diffClass(totals.diffTotal)}">${fmtSigned(totals.diffTotal)}</td>
+    <td class="sep-left">${fmt(totals.oldOrigin)}</td><td>${fmt(totals.newOrigin)}</td><td class="diff ${diffClass(totals.diffOrigin)}">${fmtSigned(totals.diffOrigin)}</td>
+    <td class="sep-left">${fmt(totals.oldCdn)}</td><td>${fmt(totals.newCdn)}</td><td class="diff ${diffClass(totals.diffCdn)}">${fmtSigned(totals.diffCdn)}</td>
+  </tr>`;
+
+  document.getElementById('result').style.display = 'block';
+  renderChart();
+}
+
+function setMetric(m){
+  currentMetric = m;
+  document.querySelectorAll('.metric-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.metric === m);
+  });
+  renderChart();
+}
+
+function renderChart(){
+  const container = document.getElementById('chartContainer');
+  if(!lastRows.length){ container.innerHTML = ''; return; }
+
+  const oldKey = 'old' + currentMetric;
+  const newKey = 'new' + currentMetric;
+  const pts = lastRows.map(r => ({ date: r.date, o: r[oldKey], n: r[newKey] }));
+
+  const W = 900, H = 260, padL = 60, padR = 20, padT = 20, padB = 34;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+
+  const allVals = pts.flatMap(p => [p.o, p.n]);
+  let minV = Math.min(0, ...allVals);
+  let maxV = Math.max(...allVals, 1);
+  if(maxV === minV) maxV = minV + 1;
+
+  const x = i => padL + (pts.length <= 1 ? innerW/2 : (i/(pts.length-1)) * innerW);
+  const y = v => padT + innerH - ((v - minV)/(maxV - minV)) * innerH;
+
+  const pathFor = key => pts.map((p,i) => `${i===0?'M':'L'} ${x(i).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(' ');
+
+  const oldPath = pathFor('o');
+  const newPath = pathFor('n');
+
+  // y-axis ticks
+  const ticks = 4;
+  let yTicks = '';
+  for(let t=0;t<=ticks;t++){
+    const v = minV + (maxV-minV) * (t/ticks);
+    const yy = y(v);
+    yTicks += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W-padR}" y2="${yy.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`;
+    yTicks += `<text x="${padL-8}" y="${(yy+4).toFixed(1)}" text-anchor="end" font-size="10" font-family="var(--mono)" fill="var(--muted)">${formatCompact(v)}</text>`;
+  }
+
+  // x-axis ticks: show up to 8 labels
+  const maxLabels = Math.min(8, pts.length);
+  const step = Math.max(1, Math.floor(pts.length / maxLabels));
+  let xTicks = '';
+  pts.forEach((p,i) => {
+    if(i % step === 0 || i === pts.length-1){
+      xTicks += `<text x="${x(i).toFixed(1)}" y="${H-10}" text-anchor="middle" font-size="9.5" font-family="var(--mono)" fill="var(--muted)">${fmtDate(p.date)}</text>`;
+    }
+  });
+
+  const dots = pts.map((p,i) => `
+    <circle cx="${x(i).toFixed(1)}" cy="${y(p.o).toFixed(1)}" r="2.5" fill="var(--old)"/>
+    <circle cx="${x(i).toFixed(1)}" cy="${y(p.n).toFixed(1)}" r="2.5" fill="var(--new)"/>
+  `).join('');
+
+  const svg = `
+  <svg viewBox="0 0 ${W} ${H}" style="width:100%; height:auto; overflow: visible;" xmlns="http://www.w3.org/2000/svg">
+    ${yTicks}
+    <path d="${oldPath}" fill="none" stroke="var(--old)" stroke-width="2"/>
+    <path d="${newPath}" fill="none" stroke="var(--new)" stroke-width="2"/>
+    ${dots}
+    ${xTicks}
+  </svg>`;
+  container.innerHTML = svg;
+}
+
+function formatCompact(v){
+  const abs = Math.abs(v);
+  if(abs >= 1e9) return (v/1e9).toFixed(1) + 'B';
+  if(abs >= 1e6) return (v/1e6).toFixed(1) + 'M';
+  if(abs >= 1e3) return (v/1e3).toFixed(1) + 'K';
+  return String(Math.round(v));
+}
+
+function convert(){
+  hideError();
+  setSaveStatus('');
+  const rawOld = document.getElementById('oldInput').value.trim();
+  const rawNew = document.getElementById('newInput').value.trim();
+  const name = document.getElementById('nameInput').value.trim();
+
+  if(!name){
+    showError('Vui lòng nhập Name để có thể lưu và cộng dồn dữ liệu sau này.');
+    return;
+  }
+  if(!rawOld || !rawNew){
+    showError('Vui lòng dán đầy đủ JSON cho cả hai bên OLD và NEW.');
+    return;
+  }
+
+  let oldP, newP;
+  try{
+    oldP = extractPayload(rawOld, 'OLD');
+    newP = extractPayload(rawNew, 'NEW');
+  }catch(e){
+    showError(e.message);
+    return;
+  }
+
+  draftRawRows = buildRawRows(oldP, newP);
+  currentName = name;
+  document.getElementById('saveBtn').disabled = false;
+
+  renderRows(draftRawRows, name + ' (chưa lưu — bản xem trước)', new Set());
+}
+
+async function saveCurrent(){
+  if(!draftRawRows || !currentName){
+    setSaveStatus('Chưa có dữ liệu để lưu. Bấm "So sánh" trước.', 'err');
+    return;
+  }
+  setSaveStatus('Đang lưu...');
+  const key = storageKey(currentName);
+  try{
+    let existingRows = [];
+    try{
+      const existing = await window.storage.get(key, false);
+      if(existing && existing.value){
+        const parsed = JSON.parse(existing.value);
+        existingRows = parsed.rows || [];
+      }
+    }catch(e){ existingRows = []; }
+
+    const { merged, newlyAdded } = mergeRawRows(existingRows, draftRawRows);
+
+    const payload = { name: currentName, rows: merged, updatedAt: new Date().toISOString() };
+    const res = await window.storage.set(key, JSON.stringify(payload), false);
+    if(!res){ throw new Error('Storage trả về rỗng'); }
+
+    setSaveStatus(
+      newlyAdded.length > 0
+        ? `Đã lưu — thêm ${newlyAdded.length} ngày mới (tổng ${merged.length} ngày).`
+        : `Đã lưu — không có ngày mới (tổng ${merged.length} ngày, các ngày trùng được giữ nguyên).`,
+      'ok'
+    );
+
+    renderRows(merged, currentName, new Set(newlyAdded));
+    await refreshSavedList();
+  }catch(e){
+    setSaveStatus('Lỗi khi lưu: ' + e.message, 'err');
+  }
+}
+
+async function refreshSavedList(){
+  const listEl = document.getElementById('savedList');
+  const emptyNote = document.getElementById('emptyNote');
+  try{
+    const listRes = await window.storage.list('dataset:', false);
+    const keys = (listRes && listRes.keys) || [];
+    if(keys.length === 0){
+      listEl.innerHTML = '';
+      emptyNote.style.display = 'block';
+      return;
+    }
+    emptyNote.style.display = 'none';
+
+    const items = [];
+    for(const k of keys){
+      try{
+        const res = await window.storage.get(k, false);
+        if(res && res.value){
+          const parsed = JSON.parse(res.value);
+          items.push({ key: k, name: parsed.name || k, days: (parsed.rows||[]).length, updatedAt: parsed.updatedAt });
+        }
+      }catch(e){ /* skip broken entry */ }
+    }
+    items.sort((a,b) => (b.updatedAt||'').localeCompare(a.updatedAt||''));
+
+    listEl.innerHTML = items.map(it => `
+      <div class="name-chip ${it.key === storageKey(currentName) ? 'active' : ''}" onclick="loadSaved('${it.key.replace(/'/g,"\\'")}')">
+        <div>
+          <div class="nm">${escapeHtml(it.name)}</div>
+          <div class="meta">${it.days} ngày</div>
+        </div>
+        <button class="del" onclick="event.stopPropagation(); deleteSaved('${it.key.replace(/'/g,"\\'")}')" title="Xóa">✕</button>
+      </div>
+    `).join('');
+  }catch(e){
+    listEl.innerHTML = '';
+    emptyNote.textContent = 'Không thể tải danh sách đã lưu.';
+    emptyNote.style.display = 'block';
+  }
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function loadSaved(key){
+  hideError();
+  setSaveStatus('');
+  try{
+    const res = await window.storage.get(key, false);
+    if(!res || !res.value){ throw new Error('Không tìm thấy dữ liệu.'); }
+    const parsed = JSON.parse(res.value);
+    currentName = parsed.name;
+    draftRawRows = null;
+    document.getElementById('nameInput').value = parsed.name;
+    document.getElementById('saveBtn').disabled = true;
+    renderRows(parsed.rows || [], parsed.name, new Set());
+    await refreshSavedList();
+  }catch(e){
+    showError('Lỗi khi tải dữ liệu đã lưu: ' + e.message);
+  }
+}
+
+async function deleteSaved(key){
+  if(!confirm('Xóa dữ liệu đã lưu cho Name này?')) return;
+  try{
+    await window.storage.delete(key, false);
+    await refreshSavedList();
+    setSaveStatus('Đã xóa dữ liệu đã lưu.', 'ok');
+  }catch(e){
+    setSaveStatus('Lỗi khi xóa: ' + e.message, 'err');
+  }
+}
+
+function clearInputs(){
+  document.getElementById('oldInput').value = '';
+  document.getElementById('newInput').value = '';
+  hideError();
+}
+
+function loadSample(){
+  document.getElementById('nameInput').value = 'Domain ABC';
+  document.getElementById('oldInput').value = JSON.stringify({
+    "Data": {
+      "label": ["2026-07-24T00:00:00.0000000Z","2026-07-25T00:00:00.0000000Z","2026-07-26T00:00:00.0000000Z","2026-07-27T00:00:00.0000000Z","2026-07-28T00:00:00.0000000Z","2026-07-29T00:00:00.0000000Z","2026-07-30T00:00:00.0000000Z","2026-07-31T00:00:00.0000000Z"],
+      "TotalRequest": 179957148, "TotalCache": 115440552, "TotalOrigin": 64516596,
+      "items": [
+        {"label":"total_request_label","value":[0,31710631,30279114,41002982,40382273,36582148,0,0]},
+        {"label":"origin_request_label","value":[0,11684718,10498052,14718049,14038614,13577163,0,0]}
+      ]
+    }
+  }, null, 2);
+  document.getElementById('newInput').value = JSON.stringify({
+    "Data": {
+      "label": ["2026-07-24T00:00:00.0000000Z","2026-07-25T00:00:00.0000000Z","2026-07-26T00:00:00.0000000Z","2026-07-27T00:00:00.0000000Z","2026-07-28T00:00:00.0000000Z","2026-07-29T00:00:00.0000000Z","2026-07-30T00:00:00.0000000Z","2026-07-31T00:00:00.0000000Z"],
+      "TotalRequest": 185320210, "TotalCache": 121980344, "TotalOrigin": 63339866,
+      "items": [
+        {"label":"total_request_label","value":[0,32950210,31102340,42588120,41210050,37450000,0,0]},
+        {"label":"origin_request_label","value":[0,10980210,9820330,13900450,13390210,13248666,0,0]}
+      ]
+    }
+  }, null, 2);
+  convert();
+}
+
+function copyCSV(){
+  if(!lastRows.length) return;
+  let csv = 'Ngay,Total Old,Total New,Total Diff,Origin Old,Origin New,Origin Diff,CDN Old,CDN New,CDN Diff\n';
+  lastRows.forEach(r => {
+    csv += `${fmtDate(r.date)},${r.oldTotal},${r.newTotal},${r.diffTotal},${r.oldOrigin},${r.newOrigin},${r.diffOrigin},${r.oldCdn},${r.newCdn},${r.diffCdn}\n`;
+  });
+  csv += `Tong,${lastTotals.oldTotal},${lastTotals.newTotal},${lastTotals.diffTotal},${lastTotals.oldOrigin},${lastTotals.newOrigin},${lastTotals.diffOrigin},${lastTotals.oldCdn},${lastTotals.newCdn},${lastTotals.diffCdn}\n`;
+  navigator.clipboard.writeText(csv);
+  flashButton(event.target, 'Đã copy CSV');
+}
+
+function copyMarkdown(){
+  if(!lastRows.length) return;
+  let md = '| Ngày | Total Old | Total New | Δ Total | Origin Old | Origin New | Δ Origin | CDN Old | CDN New | Δ CDN |\n';
+  md += '|---|---|---|---|---|---|---|---|---|---|\n';
+  lastRows.forEach(r => {
+    md += `| ${fmtDate(r.date)} | ${fmt(r.oldTotal)} | ${fmt(r.newTotal)} | ${fmtSigned(r.diffTotal)} | ${fmt(r.oldOrigin)} | ${fmt(r.newOrigin)} | ${fmtSigned(r.diffOrigin)} | ${fmt(r.oldCdn)} | ${fmt(r.newCdn)} | ${fmtSigned(r.diffCdn)} |\n`;
+  });
+  md += `| **Tổng** | **${fmt(lastTotals.oldTotal)}** | **${fmt(lastTotals.newTotal)}** | **${fmtSigned(lastTotals.diffTotal)}** | **${fmt(lastTotals.oldOrigin)}** | **${fmt(lastTotals.newOrigin)}** | **${fmtSigned(lastTotals.diffOrigin)}** | **${fmt(lastTotals.oldCdn)}** | **${fmt(lastTotals.newCdn)}** | **${fmtSigned(lastTotals.diffCdn)}** |\n`;
+  navigator.clipboard.writeText(md);
+  flashButton(event.target, 'Đã copy Markdown');
+}
+
+function flashButton(btn, text){
+  if(!btn) return;
+  const orig = btn.textContent;
+  btn.textContent = text;
+  setTimeout(()=>{ btn.textContent = orig; }, 1500);
+}
+
+// ============ STATUS CODE COMPARATOR ============
+let lastStatusRows = [];
+let lastStatusTotals = {};
+let lastStatusCodes = [];
+let currentStatusMetric = null;
+let currentStatusName = '';
+let draftStatusRawRows = null;
+
+function statusStorageKey(name){ return `httpstatus:${slugify(name)}`; }
+
+function extractStatusPayload(raw, sideName){
+  let parsed;
+  try{ parsed = JSON.parse(raw); }
+  catch(e){ throw new Error(`JSON "${sideName}" không hợp lệ: ` + e.message); }
+
+  if(parsed && Array.isArray(parsed.arguments) && typeof parsed.arguments[0] === 'string'){
+    try{ parsed = JSON.parse(parsed.arguments[0]); }catch(e){ /* ignore */ }
+  }
+  let data = parsed.Data || parsed.data || parsed;
+  if(!data || !Array.isArray(data.label)){
+    throw new Error(`Dữ liệu "${sideName}": không tìm thấy mảng "label" (danh sách ngày).`);
+  }
+  if(!Array.isArray(data.items) || data.items.length === 0){
+    throw new Error(`Dữ liệu "${sideName}": không tìm thấy mảng "items" (danh sách status code).`);
+  }
+  const codes = {};
+  data.items.forEach(item => {
+    if(item && item.label){ codes[String(item.label)] = item.value || []; }
+  });
+  return { labels: data.label, codes };
+}
+
+// raw row shape: { date, values: { "200": {old, new}, "403": {old,new}, ... } }
+function buildRawStatusRows(oldP, newP){
+  const allDates = [...oldP.labels];
+  newP.labels.forEach(d => { if(!allDates.includes(d)) allDates.push(d); });
+  allDates.sort();
+
+  const allCodes = new Set([...Object.keys(oldP.codes), ...Object.keys(newP.codes)]);
+
+  return allDates.map(date => {
+    const oldIdx = oldP.labels.indexOf(date);
+    const newIdx = newP.labels.indexOf(date);
+    const values = {};
+    allCodes.forEach(code => {
+      const oldArr = oldP.codes[code] || [];
+      const newArr = newP.codes[code] || [];
+      values[code] = {
+        old: oldIdx >= 0 ? (oldArr[oldIdx] || 0) : 0,
+        new: newIdx >= 0 ? (newArr[newIdx] || 0) : 0
+      };
+    });
+    return { date, values };
+  });
+}
+
+function mergeRawStatusRows(existingRows, incomingRows){
+  const map = {};
+  const newlyAdded = [];
+  existingRows.forEach(r => { map[r.date] = r; });
+  incomingRows.forEach(r => {
+    if(!map[r.date]){ map[r.date] = r; newlyAdded.push(r.date); }
+  });
+  const merged = Object.values(map).sort((a,b) => a.date.localeCompare(b.date));
+  return { merged, newlyAdded };
+}
+
+function statusRowHasData(row){
+  return Object.values(row.values).some(v => v.old || v.new);
+}
+
+function getSortedCodes(rows){
+  const totals = {};
+  rows.forEach(r => {
+    Object.entries(r.values).forEach(([code, v]) => {
+      totals[code] = (totals[code] || 0) + (v.old || 0) + (v.new || 0);
+    });
+  });
+  return Object.keys(totals).sort((a,b) => totals[b] - totals[a]);
+}
+
+function renderStatusRows(rawRows, title, highlightDates){
+  const rows = [...rawRows].sort((a,b) => a.date.localeCompare(b.date));
+  const codes = getSortedCodes(rows);
+  lastStatusRows = rows;
+  lastStatusCodes = codes;
+
+  if(!currentStatusMetric || !codes.includes(currentStatusMetric)){
+    currentStatusMetric = codes[0] || null;
+  }
+
+  // totals per code
+  const totals = {};
+  codes.forEach(code => {
+    let sumOld = 0, sumNew = 0;
+    rows.forEach(r => { const v = r.values[code] || {old:0,new:0}; sumOld += v.old; sumNew += v.new; });
+    totals[code] = { old: sumOld, new: sumNew, diff: sumNew - sumOld };
+  });
+  lastStatusTotals = totals;
+
+  const mismatchDays = rows.filter(r => statusRowHasData(r) && codes.some(code => {
+    const v = r.values[code] || {old:0,new:0};
+    return v.new - v.old !== 0;
+  })).length;
+  const dataDays = rows.filter(statusRowHasData).length;
+
+  document.getElementById('resultTitleStatus').textContent = title;
+  document.getElementById('resultMetaStatus').textContent = `${rows.length} ngày · ${codes.length} status code`;
+
+  // stat cards
+  const statsEl = document.getElementById('statsStatus');
+  let statsHtml = codes.map(code => {
+    const t = totals[code];
+    const cls = t.diff > 0 ? 'diff-up' : t.diff < 0 ? 'diff-down' : 'diff-flat';
+    return `<div class="stat ${cls}">
+      <div class="label">${escapeHtml(code)} — Δ (New − Old)</div>
+      <div class="value">${fmtSigned(t.diff)}</div>
+      <div class="sub-vals"><span class="o">Old: ${fmt(t.old)}</span> / <span class="n">New: ${fmt(t.new)}</span></div>
+    </div>`;
+  }).join('');
+  statsHtml += `<div class="stat">
+    <div class="label">Ngày lệch dữ liệu</div>
+    <div class="value">${mismatchDays} / ${dataDays}</div>
+    <div class="sub-vals">trên tổng số ngày có dữ liệu</div>
+  </div>`;
+  statsEl.innerHTML = statsHtml;
+
+  // metric tabs
+  const tabsEl = document.getElementById('metricTabsStatus');
+  tabsEl.innerHTML = codes.map(code => `<button class="metric-tab ${code === currentStatusMetric ? 'active' : ''}" data-metric="${escapeHtml(code)}" onclick="setStatusMetric('${code.replace(/'/g,"\\'")}')">${escapeHtml(code)}</button>`).join('');
+
+  // table head
+  const theadEl = document.getElementById('tableHeadStatus');
+  theadEl.innerHTML = `
+    <tr class="group-row">
+      <th></th>
+      ${codes.map(code => `<th class="grp-total sep-left" colspan="3">${escapeHtml(code)}</th>`).join('')}
+    </tr>
+    <tr>
+      <th>Ngày</th>
+      ${codes.map(() => `<th class="sep-left">Old</th><th>New</th><th>Δ</th>`).join('')}
+    </tr>`;
+
+  const hl = highlightDates || new Set();
+  const tbody = document.getElementById('tableBodyStatus');
+  tbody.innerHTML = rows.map(r => {
+    const zeroCls = !statusRowHasData(r) ? ' zero' : '';
+    const firstCellCls = hl.has(r.date) ? ' new-day' : '';
+    const cells = codes.map(code => {
+      const v = r.values[code] || {old:0,new:0};
+      const diff = v.new - v.old;
+      return `<td class="old sep-left${zeroCls}">${fmt(v.old)}</td><td class="new${zeroCls}">${fmt(v.new)}</td><td class="diff ${diffClass(diff)}">${fmtSigned(diff)}</td>`;
+    }).join('');
+    return `<tr><td class="${firstCellCls}">${fmtDate(r.date)}</td>${cells}</tr>`;
+  }).join('');
+
+  const tfootEl = document.getElementById('tableFootStatus');
+  tfootEl.innerHTML = `<tr><td>Tổng</td>${codes.map(code => {
+    const t = totals[code];
+    return `<td class="sep-left">${fmt(t.old)}</td><td>${fmt(t.new)}</td><td class="diff ${diffClass(t.diff)}">${fmtSigned(t.diff)}</td>`;
+  }).join('')}</tr>`;
+
+  document.getElementById('resultStatus').style.display = 'block';
+  renderStatusChart();
+}
+
+function setStatusMetric(code){
+  currentStatusMetric = code;
+  document.querySelectorAll('#metricTabsStatus .metric-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.metric === code);
+  });
+  renderStatusChart();
+}
+
+function renderStatusChart(){
+  const container = document.getElementById('chartContainerStatus');
+  if(!lastStatusRows.length || !currentStatusMetric){ container.innerHTML = ''; return; }
+
+  const code = currentStatusMetric;
+  const pts = lastStatusRows.map(r => {
+    const v = r.values[code] || {old:0,new:0};
+    return { date: r.date, o: v.old, n: v.new };
+  });
+
+  const W = 900, H = 260, padL = 60, padR = 20, padT = 20, padB = 34;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+
+  const allVals = pts.flatMap(p => [p.o, p.n]);
+  let minV = Math.min(0, ...allVals);
+  let maxV = Math.max(...allVals, 1);
+  if(maxV === minV) maxV = minV + 1;
+
+  const x = i => padL + (pts.length <= 1 ? innerW/2 : (i/(pts.length-1)) * innerW);
+  const y = v => padT + innerH - ((v - minV)/(maxV - minV)) * innerH;
+  const pathFor = key => pts.map((p,i) => `${i===0?'M':'L'} ${x(i).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(' ');
+
+  const oldPath = pathFor('o');
+  const newPath = pathFor('n');
+
+  const ticks = 4;
+  let yTicks = '';
+  for(let t=0;t<=ticks;t++){
+    const v = minV + (maxV-minV) * (t/ticks);
+    const yy = y(v);
+    yTicks += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W-padR}" y2="${yy.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`;
+    yTicks += `<text x="${padL-8}" y="${(yy+4).toFixed(1)}" text-anchor="end" font-size="10" font-family="var(--mono)" fill="var(--muted)">${formatCompact(v)}</text>`;
+  }
+
+  const maxLabels = Math.min(8, pts.length);
+  const step = Math.max(1, Math.floor(pts.length / maxLabels));
+  let xTicks = '';
+  pts.forEach((p,i) => {
+    if(i % step === 0 || i === pts.length-1){
+      xTicks += `<text x="${x(i).toFixed(1)}" y="${H-10}" text-anchor="middle" font-size="9.5" font-family="var(--mono)" fill="var(--muted)">${fmtDate(p.date)}</text>`;
+    }
+  });
+
+  const dots = pts.map((p,i) => `
+    <circle cx="${x(i).toFixed(1)}" cy="${y(p.o).toFixed(1)}" r="2.5" fill="var(--old)"/>
+    <circle cx="${x(i).toFixed(1)}" cy="${y(p.n).toFixed(1)}" r="2.5" fill="var(--new)"/>
+  `).join('');
+
+  container.innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" style="width:100%; height:auto; overflow: visible;" xmlns="http://www.w3.org/2000/svg">
+    ${yTicks}
+    <path d="${oldPath}" fill="none" stroke="var(--old)" stroke-width="2"/>
+    <path d="${newPath}" fill="none" stroke="var(--new)" stroke-width="2"/>
+    ${dots}
+    ${xTicks}
+  </svg>`;
+}
+
+function convertStatus(){
+  document.getElementById('errorBoxStatus').style.display = 'none';
+  document.getElementById('saveStatusStatus').textContent = '';
+  const rawOld = document.getElementById('oldInputStatus').value.trim();
+  const rawNew = document.getElementById('newInputStatus').value.trim();
+  const name = document.getElementById('nameInputStatus').value.trim();
+
+  const errBox = document.getElementById('errorBoxStatus');
+  function showErr(msg){ errBox.textContent = msg; errBox.style.display = 'block'; }
+
+  if(!name){ showErr('Vui lòng nhập Name để có thể lưu và cộng dồn dữ liệu sau này.'); return; }
+  if(!rawOld || !rawNew){ showErr('Vui lòng dán đầy đủ JSON cho cả hai bên OLD và NEW.'); return; }
+
+  let oldP, newP;
+  try{
+    oldP = extractStatusPayload(rawOld, 'OLD');
+    newP = extractStatusPayload(rawNew, 'NEW');
+  }catch(e){ showErr(e.message); return; }
+
+  draftStatusRawRows = buildRawStatusRows(oldP, newP);
+  currentStatusName = name;
+  currentStatusMetric = null;
+  document.getElementById('saveBtnStatus').disabled = false;
+
+  renderStatusRows(draftStatusRawRows, name + ' (chưa lưu — bản xem trước)', new Set());
+}
+
+async function saveCurrentStatus(){
+  const statusEl = document.getElementById('saveStatusStatus');
+  function setStat(msg, cls){ statusEl.textContent = msg; statusEl.className = 'save-status' + (cls ? ' ' + cls : ''); }
+
+  if(!draftStatusRawRows || !currentStatusName){
+    setStat('Chưa có dữ liệu để lưu. Bấm "So sánh" trước.', 'err');
+    return;
+  }
+  setStat('Đang lưu...');
+  const key = statusStorageKey(currentStatusName);
+  try{
+    let existingRows = [];
+    try{
+      const existing = await window.storage.get(key, false);
+      if(existing && existing.value){
+        const parsed = JSON.parse(existing.value);
+        existingRows = parsed.rows || [];
+      }
+    }catch(e){ existingRows = []; }
+
+    const { merged, newlyAdded } = mergeRawStatusRows(existingRows, draftStatusRawRows);
+    const payload = { name: currentStatusName, rows: merged, updatedAt: new Date().toISOString() };
+    const res = await window.storage.set(key, JSON.stringify(payload), false);
+    if(!res){ throw new Error('Storage trả về rỗng'); }
+
+    setStat(
+      newlyAdded.length > 0
+        ? `Đã lưu — thêm ${newlyAdded.length} ngày mới (tổng ${merged.length} ngày).`
+        : `Đã lưu — không có ngày mới (tổng ${merged.length} ngày, các ngày trùng được giữ nguyên).`,
+      'ok'
+    );
+
+    renderStatusRows(merged, currentStatusName, new Set(newlyAdded));
+    await refreshSavedStatusList();
+  }catch(e){
+    setStat('Lỗi khi lưu: ' + e.message, 'err');
+  }
+}
+
+async function refreshSavedStatusList(){
+  const listEl = document.getElementById('savedListStatus');
+  const emptyNote = document.getElementById('emptyNoteStatus');
+  try{
+    const listRes = await window.storage.list('httpstatus:', false);
+    const keys = (listRes && listRes.keys) || [];
+    if(keys.length === 0){ listEl.innerHTML = ''; emptyNote.style.display = 'block'; return; }
+    emptyNote.style.display = 'none';
+
+    const items = [];
+    for(const k of keys){
+      try{
+        const res = await window.storage.get(k, false);
+        if(res && res.value){
+          const parsed = JSON.parse(res.value);
+          items.push({ key: k, name: parsed.name || k, days: (parsed.rows||[]).length, updatedAt: parsed.updatedAt });
+        }
+      }catch(e){ /* skip */ }
+    }
+    items.sort((a,b) => (b.updatedAt||'').localeCompare(a.updatedAt||''));
+
+    listEl.innerHTML = items.map(it => `
+      <div class="name-chip ${it.key === statusStorageKey(currentStatusName) ? 'active' : ''}" onclick="loadSavedStatus('${it.key.replace(/'/g,"\\'")}')">
+        <div>
+          <div class="nm">${escapeHtml(it.name)}</div>
+          <div class="meta">${it.days} ngày</div>
+        </div>
+        <button class="del" onclick="event.stopPropagation(); deleteSavedStatus('${it.key.replace(/'/g,"\\'")}')" title="Xóa">✕</button>
+      </div>
+    `).join('');
+  }catch(e){
+    listEl.innerHTML = '';
+    emptyNote.textContent = 'Không thể tải danh sách đã lưu.';
+    emptyNote.style.display = 'block';
+  }
+}
+
+async function loadSavedStatus(key){
+  document.getElementById('errorBoxStatus').style.display = 'none';
+  document.getElementById('saveStatusStatus').textContent = '';
+  try{
+    const res = await window.storage.get(key, false);
+    if(!res || !res.value){ throw new Error('Không tìm thấy dữ liệu.'); }
+    const parsed = JSON.parse(res.value);
+    currentStatusName = parsed.name;
+    draftStatusRawRows = null;
+    currentStatusMetric = null;
+    document.getElementById('nameInputStatus').value = parsed.name;
+    document.getElementById('saveBtnStatus').disabled = true;
+    renderStatusRows(parsed.rows || [], parsed.name, new Set());
+    await refreshSavedStatusList();
+  }catch(e){
+    const errBox = document.getElementById('errorBoxStatus');
+    errBox.textContent = 'Lỗi khi tải dữ liệu đã lưu: ' + e.message;
+    errBox.style.display = 'block';
+  }
+}
+
+async function deleteSavedStatus(key){
+  if(!confirm('Xóa dữ liệu đã lưu cho Name này?')) return;
+  try{
+    await window.storage.delete(key, false);
+    await refreshSavedStatusList();
+  }catch(e){ /* ignore */ }
+}
+
+function clearInputsStatus(){
+  document.getElementById('oldInputStatus').value = '';
+  document.getElementById('newInputStatus').value = '';
+  document.getElementById('errorBoxStatus').style.display = 'none';
+}
+
+function loadSampleStatus(){
+  document.getElementById('nameInputStatus').value = 'Domain ABC - HTTP Status';
+  const sampleOld = {
+    "Data": {
+      "label": ["2026-07-01T00:00:00.0000000Z","2026-07-02T00:00:00.0000000Z","2026-07-03T00:00:00.0000000Z","2026-07-04T00:00:00.0000000Z","2026-07-05T00:00:00.0000000Z"],
+      "items": [
+        {"label":"200","value":[70,0,5,0,0]},
+        {"label":"403","value":[6,0,6,30,0]},
+        {"label":"404","value":[21,0,21,4,0]},
+        {"label":"502","value":[0,0,0,0,0]}
+      ]
+    }
+  };
+  const sampleNew = {
+    "Data": {
+      "label": ["2026-07-26T00:00:00.0000000Z","2026-07-27T00:00:00.0000000Z","2026-07-28T00:00:00.0000000Z","2026-07-29T00:00:00.0000000Z","2026-07-30T00:00:00.0000000Z"],
+      "items": [
+        {"label":"200","value":[1,52,1,2,82]},
+        {"label":"403","value":[0,505,0,2,813]},
+        {"label":"404","value":[0,0,0,0,0]},
+        {"label":"502","value":[0,0,0,0,0]}
+      ]
+    }
+  };
+  document.getElementById('oldInputStatus').value = JSON.stringify(sampleOld, null, 2);
+  document.getElementById('newInputStatus').value = JSON.stringify(sampleNew, null, 2);
+  convertStatus();
+}
+
+function copyCSVStatus(){
+  if(!lastStatusRows.length) return;
+  const codes = lastStatusCodes;
+  let csv = 'Ngay,' + codes.flatMap(c => [`${c} Old`,`${c} New`,`${c} Diff`]).join(',') + '\n';
+  lastStatusRows.forEach(r => {
+    const cells = codes.flatMap(code => {
+      const v = r.values[code] || {old:0,new:0};
+      return [v.old, v.new, v.new - v.old];
+    });
+    csv += `${fmtDate(r.date)},${cells.join(',')}\n`;
+  });
+  const totalCells = codes.flatMap(code => {
+    const t = lastStatusTotals[code];
+    return [t.old, t.new, t.diff];
+  });
+  csv += `Tong,${totalCells.join(',')}\n`;
+  navigator.clipboard.writeText(csv);
+  flashButton(event.target, 'Đã copy CSV');
+}
+
+function copyMarkdownStatus(){
+  if(!lastStatusRows.length) return;
+  const codes = lastStatusCodes;
+  let md = '| Ngày | ' + codes.flatMap(c => [`${c} Old`,`${c} New`,`${c} Δ`]).join(' | ') + ' |\n';
+  md += '|---|' + codes.map(()=>'---|---|---|').join('') + '\n';
+  lastStatusRows.forEach(r => {
+    const cells = codes.flatMap(code => {
+      const v = r.values[code] || {old:0,new:0};
+      const diff = v.new - v.old;
+      return [fmt(v.old), fmt(v.new), fmtSigned(diff)];
+    });
+    md += `| ${fmtDate(r.date)} | ${cells.join(' | ')} |\n`;
+  });
+  const totalCells = codes.flatMap(code => {
+    const t = lastStatusTotals[code];
+    return [`**${fmt(t.old)}**`, `**${fmt(t.new)}**`, `**${fmtSigned(t.diff)}**`];
+  });
+  md += `| **Tổng** | ${totalCells.join(' | ')} |\n`;
+  navigator.clipboard.writeText(md);
+  flashButton(event.target, 'Đã copy Markdown');
+}
+
+// init
+refreshSavedList();
+refreshSavedStatusList();
+refreshSavedTxList();
+
+// ============ HTTP TRANSACTION COMPARATOR ============
+let lastTxRows = [];
+let lastTxTotals = {};
+let lastTxCodes = [];
+let currentTxMetric = null;
+let currentTxName = '';
+let draftTxRawRows = null;
+
+function txStorageKey(name){ return `httptransaction:${slugify(name)}`; }
+
+function extractTxPayload(raw, sideName){
+  let parsed;
+  try{ parsed = JSON.parse(raw); }
+  catch(e){ throw new Error(`JSON "${sideName}" không hợp lệ: ` + e.message); }
+
+  if(parsed && Array.isArray(parsed.arguments) && typeof parsed.arguments[0] === 'string'){
+    try{ parsed = JSON.parse(parsed.arguments[0]); }catch(e){ /* ignore */ }
+  }
+  let data = parsed.Data || parsed.data || parsed;
+  const labels = data.label || data.labels;
+  if(!data || !Array.isArray(labels)){
+    throw new Error(`Dữ liệu "${sideName}": không tìm thấy mảng "label"/"labels" (danh sách ngày).`);
+  }
+  if(!Array.isArray(data.items) || data.items.length === 0){
+    throw new Error(`Dữ liệu "${sideName}": không tìm thấy mảng "items".`);
+  }
+  const codes = {};
+  data.items.forEach(item => {
+    if(item && item.label){ codes[String(item.label)] = (item.value || []).map(v => Number(v) || 0); }
+  });
+  return { labels, codes };
+}
+
+function buildRawTxRows(oldP, newP){
+  const allDates = [...oldP.labels];
+  newP.labels.forEach(d => { if(!allDates.includes(d)) allDates.push(d); });
+  allDates.sort();
+
+  const allCodes = new Set([...Object.keys(oldP.codes), ...Object.keys(newP.codes)]);
+
+  return allDates.map(date => {
+    const oldIdx = oldP.labels.indexOf(date);
+    const newIdx = newP.labels.indexOf(date);
+    const values = {};
+    allCodes.forEach(code => {
+      const oldArr = oldP.codes[code] || [];
+      const newArr = newP.codes[code] || [];
+      values[code] = {
+        old: oldIdx >= 0 ? (oldArr[oldIdx] || 0) : 0,
+        new: newIdx >= 0 ? (newArr[newIdx] || 0) : 0
+      };
+    });
+    return { date, values };
+  });
+}
+
+function mergeRawTxRows(existingRows, incomingRows){
+  const map = {};
+  const newlyAdded = [];
+  existingRows.forEach(r => { map[r.date] = r; });
+  incomingRows.forEach(r => {
+    if(!map[r.date]){ map[r.date] = r; newlyAdded.push(r.date); }
+  });
+  const merged = Object.values(map).sort((a,b) => a.date.localeCompare(b.date));
+  return { merged, newlyAdded };
+}
+
+function txRowHasData(row){
+  return Object.values(row.values).some(v => v.old || v.new);
+}
+
+function getSortedTxCodes(rows){
+  const totals = {};
+  rows.forEach(r => {
+    Object.entries(r.values).forEach(([code, v]) => {
+      totals[code] = (totals[code] || 0) + (v.old || 0) + (v.new || 0);
+    });
+  });
+  // Preferred order for known categories, then by volume
+  const preferred = ['Legitimate','Blocked','Reported'];
+  return Object.keys(totals).sort((a,b) => {
+    const pa = preferred.indexOf(a), pb = preferred.indexOf(b);
+    if(pa !== -1 && pb !== -1) return pa - pb;
+    if(pa !== -1) return -1;
+    if(pb !== -1) return 1;
+    return totals[b] - totals[a];
+  });
+}
+
+function renderTxRows(rawRows, title, highlightDates){
+  const rows = [...rawRows].sort((a,b) => a.date.localeCompare(b.date));
+  const codes = getSortedTxCodes(rows);
+  lastTxRows = rows;
+  lastTxCodes = codes;
+
+  if(!currentTxMetric || !codes.includes(currentTxMetric)){
+    currentTxMetric = codes[0] || null;
+  }
+
+  const totals = {};
+  codes.forEach(code => {
+    let sumOld = 0, sumNew = 0;
+    rows.forEach(r => { const v = r.values[code] || {old:0,new:0}; sumOld += v.old; sumNew += v.new; });
+    totals[code] = { old: sumOld, new: sumNew, diff: sumNew - sumOld };
+  });
+  lastTxTotals = totals;
+
+  const mismatchDays = rows.filter(r => txRowHasData(r) && codes.some(code => {
+    const v = r.values[code] || {old:0,new:0};
+    return v.new - v.old !== 0;
+  })).length;
+  const dataDays = rows.filter(txRowHasData).length;
+
+  document.getElementById('resultTitleTx').textContent = title;
+  document.getElementById('resultMetaTx').textContent = `${rows.length} ngày · ${codes.length} loại`;
+
+  const statsEl = document.getElementById('statsTx');
+  let statsHtml = codes.map(code => {
+    const t = totals[code];
+    const cls = t.diff > 0 ? 'diff-up' : t.diff < 0 ? 'diff-down' : 'diff-flat';
+    return `<div class="stat ${cls}">
+      <div class="label">${escapeHtml(code)} — Δ (New − Old)</div>
+      <div class="value">${fmtSigned(t.diff)}</div>
+      <div class="sub-vals"><span class="o">Old: ${fmt(t.old)}</span> / <span class="n">New: ${fmt(t.new)}</span></div>
+    </div>`;
+  }).join('');
+  statsHtml += `<div class="stat">
+    <div class="label">Ngày lệch dữ liệu</div>
+    <div class="value">${mismatchDays} / ${dataDays}</div>
+    <div class="sub-vals">trên tổng số ngày có dữ liệu</div>
+  </div>`;
+  statsEl.innerHTML = statsHtml;
+
+  const tabsEl = document.getElementById('metricTabsTx');
+  tabsEl.innerHTML = codes.map(code => `<button class="metric-tab ${code === currentTxMetric ? 'active' : ''}" data-metric="${escapeHtml(code)}" onclick="setTxMetric('${code.replace(/'/g,"\\'")}')">${escapeHtml(code)}</button>`).join('');
+
+  const theadEl = document.getElementById('tableHeadTx');
+  theadEl.innerHTML = `
+    <tr class="group-row">
+      <th></th>
+      ${codes.map(code => `<th class="grp-total sep-left" colspan="3">${escapeHtml(code)}</th>`).join('')}
+    </tr>
+    <tr>
+      <th>Ngày</th>
+      ${codes.map(() => `<th class="sep-left">Old</th><th>New</th><th>Δ</th>`).join('')}
+    </tr>`;
+
+  const hl = highlightDates || new Set();
+  const tbody = document.getElementById('tableBodyTx');
+  tbody.innerHTML = rows.map(r => {
+    const zeroCls = !txRowHasData(r) ? ' zero' : '';
+    const firstCellCls = hl.has(r.date) ? ' new-day' : '';
+    const cells = codes.map(code => {
+      const v = r.values[code] || {old:0,new:0};
+      const diff = v.new - v.old;
+      return `<td class="old sep-left${zeroCls}">${fmt(v.old)}</td><td class="new${zeroCls}">${fmt(v.new)}</td><td class="diff ${diffClass(diff)}">${fmtSigned(diff)}</td>`;
+    }).join('');
+    return `<tr><td class="${firstCellCls}">${fmtDate(r.date)}</td>${cells}</tr>`;
+  }).join('');
+
+  const tfootEl = document.getElementById('tableFootTx');
+  tfootEl.innerHTML = `<tr><td>Tổng</td>${codes.map(code => {
+    const t = totals[code];
+    return `<td class="sep-left">${fmt(t.old)}</td><td>${fmt(t.new)}</td><td class="diff ${diffClass(t.diff)}">${fmtSigned(t.diff)}</td>`;
+  }).join('')}</tr>`;
+
+  document.getElementById('resultTx').style.display = 'block';
+  renderTxChart();
+}
+
+function setTxMetric(code){
+  currentTxMetric = code;
+  document.querySelectorAll('#metricTabsTx .metric-tab').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.metric === code);
+  });
+  renderTxChart();
+}
+
+function renderTxChart(){
+  const container = document.getElementById('chartContainerTx');
+  if(!lastTxRows.length || !currentTxMetric){ container.innerHTML = ''; return; }
+
+  const code = currentTxMetric;
+  const pts = lastTxRows.map(r => {
+    const v = r.values[code] || {old:0,new:0};
+    return { date: r.date, o: v.old, n: v.new };
+  });
+
+  const W = 900, H = 260, padL = 60, padR = 20, padT = 20, padB = 34;
+  const innerW = W - padL - padR, innerH = H - padT - padB;
+
+  const allVals = pts.flatMap(p => [p.o, p.n]);
+  let minV = Math.min(0, ...allVals);
+  let maxV = Math.max(...allVals, 1);
+  if(maxV === minV) maxV = minV + 1;
+
+  const x = i => padL + (pts.length <= 1 ? innerW/2 : (i/(pts.length-1)) * innerW);
+  const y = v => padT + innerH - ((v - minV)/(maxV - minV)) * innerH;
+  const pathFor = key => pts.map((p,i) => `${i===0?'M':'L'} ${x(i).toFixed(1)} ${y(p[key]).toFixed(1)}`).join(' ');
+
+  const oldPath = pathFor('o');
+  const newPath = pathFor('n');
+
+  const ticks = 4;
+  let yTicks = '';
+  for(let t=0;t<=ticks;t++){
+    const v = minV + (maxV-minV) * (t/ticks);
+    const yy = y(v);
+    yTicks += `<line x1="${padL}" y1="${yy.toFixed(1)}" x2="${W-padR}" y2="${yy.toFixed(1)}" stroke="var(--line)" stroke-width="1"/>`;
+    yTicks += `<text x="${padL-8}" y="${(yy+4).toFixed(1)}" text-anchor="end" font-size="10" font-family="var(--mono)" fill="var(--muted)">${formatCompact(v)}</text>`;
+  }
+
+  const maxLabels = Math.min(8, pts.length);
+  const step = Math.max(1, Math.floor(pts.length / maxLabels));
+  let xTicks = '';
+  pts.forEach((p,i) => {
+    if(i % step === 0 || i === pts.length-1){
+      xTicks += `<text x="${x(i).toFixed(1)}" y="${H-10}" text-anchor="middle" font-size="9.5" font-family="var(--mono)" fill="var(--muted)">${fmtDate(p.date)}</text>`;
+    }
+  });
+
+  const dots = pts.map((p,i) => `
+    <circle cx="${x(i).toFixed(1)}" cy="${y(p.o).toFixed(1)}" r="2.5" fill="var(--old)"/>
+    <circle cx="${x(i).toFixed(1)}" cy="${y(p.n).toFixed(1)}" r="2.5" fill="var(--new)"/>
+  `).join('');
+
+  container.innerHTML = `
+  <svg viewBox="0 0 ${W} ${H}" style="width:100%; height:auto; overflow: visible;" xmlns="http://www.w3.org/2000/svg">
+    ${yTicks}
+    <path d="${oldPath}" fill="none" stroke="var(--old)" stroke-width="2"/>
+    <path d="${newPath}" fill="none" stroke="var(--new)" stroke-width="2"/>
+    ${dots}
+    ${xTicks}
+  </svg>`;
+}
+
+function convertTx(){
+  document.getElementById('errorBoxTx').style.display = 'none';
+  document.getElementById('saveStatusTx').textContent = '';
+  const rawOld = document.getElementById('oldInputTx').value.trim();
+  const rawNew = document.getElementById('newInputTx').value.trim();
+  const name = document.getElementById('nameInputTx').value.trim();
+
+  const errBox = document.getElementById('errorBoxTx');
+  function showErr(msg){ errBox.textContent = msg; errBox.style.display = 'block'; }
+
+  if(!name){ showErr('Vui lòng nhập Name để có thể lưu và cộng dồn dữ liệu sau này.'); return; }
+  if(!rawOld || !rawNew){ showErr('Vui lòng dán đầy đủ JSON cho cả hai bên OLD và NEW.'); return; }
+
+  let oldP, newP;
+  try{
+    oldP = extractTxPayload(rawOld, 'OLD');
+    newP = extractTxPayload(rawNew, 'NEW');
+  }catch(e){ showErr(e.message); return; }
+
+  draftTxRawRows = buildRawTxRows(oldP, newP);
+  currentTxName = name;
+  currentTxMetric = null;
+  document.getElementById('saveBtnTx').disabled = false;
+
+  renderTxRows(draftTxRawRows, name + ' (chưa lưu — bản xem trước)', new Set());
+}
+
+async function saveCurrentTx(){
+  const statusEl = document.getElementById('saveStatusTx');
+  function setStat(msg, cls){ statusEl.textContent = msg; statusEl.className = 'save-status' + (cls ? ' ' + cls : ''); }
+
+  if(!draftTxRawRows || !currentTxName){
+    setStat('Chưa có dữ liệu để lưu. Bấm "So sánh" trước.', 'err');
+    return;
+  }
+  setStat('Đang lưu...');
+  const key = txStorageKey(currentTxName);
+  try{
+    let existingRows = [];
+    try{
+      const existing = await window.storage.get(key, false);
+      if(existing && existing.value){
+        const parsed = JSON.parse(existing.value);
+        existingRows = parsed.rows || [];
+      }
+    }catch(e){ existingRows = []; }
+
+    const { merged, newlyAdded } = mergeRawTxRows(existingRows, draftTxRawRows);
+    const payload = { name: currentTxName, rows: merged, updatedAt: new Date().toISOString() };
+    const res = await window.storage.set(key, JSON.stringify(payload), false);
+    if(!res){ throw new Error('Storage trả về rỗng'); }
+
+    setStat(
+      newlyAdded.length > 0
+        ? `Đã lưu — thêm ${newlyAdded.length} ngày mới (tổng ${merged.length} ngày).`
+        : `Đã lưu — không có ngày mới (tổng ${merged.length} ngày, các ngày trùng được giữ nguyên).`,
+      'ok'
+    );
+
+    renderTxRows(merged, currentTxName, new Set(newlyAdded));
+    await refreshSavedTxList();
+  }catch(e){
+    setStat('Lỗi khi lưu: ' + e.message, 'err');
+  }
+}
+
+async function refreshSavedTxList(){
+  const listEl = document.getElementById('savedListTx');
+  const emptyNote = document.getElementById('emptyNoteTx');
+  try{
+    const listRes = await window.storage.list('httptransaction:', false);
+    const keys = (listRes && listRes.keys) || [];
+    if(keys.length === 0){ listEl.innerHTML = ''; emptyNote.style.display = 'block'; return; }
+    emptyNote.style.display = 'none';
+
+    const items = [];
+    for(const k of keys){
+      try{
+        const res = await window.storage.get(k, false);
+        if(res && res.value){
+          const parsed = JSON.parse(res.value);
+          items.push({ key: k, name: parsed.name || k, days: (parsed.rows||[]).length, updatedAt: parsed.updatedAt });
+        }
+      }catch(e){ /* skip */ }
+    }
+    items.sort((a,b) => (b.updatedAt||'').localeCompare(a.updatedAt||''));
+
+    listEl.innerHTML = items.map(it => `
+      <div class="name-chip ${it.key === txStorageKey(currentTxName) ? 'active' : ''}" onclick="loadSavedTx('${it.key.replace(/'/g,"\\'")}')">
+        <div>
+          <div class="nm">${escapeHtml(it.name)}</div>
+          <div class="meta">${it.days} ngày</div>
+        </div>
+        <button class="del" onclick="event.stopPropagation(); deleteSavedTx('${it.key.replace(/'/g,"\\'")}')" title="Xóa">✕</button>
+      </div>
+    `).join('');
+  }catch(e){
+    listEl.innerHTML = '';
+    emptyNote.textContent = 'Không thể tải danh sách đã lưu.';
+    emptyNote.style.display = 'block';
+  }
+}
+
+async function loadSavedTx(key){
+  document.getElementById('errorBoxTx').style.display = 'none';
+  document.getElementById('saveStatusTx').textContent = '';
+  try{
+    const res = await window.storage.get(key, false);
+    if(!res || !res.value){ throw new Error('Không tìm thấy dữ liệu.'); }
+    const parsed = JSON.parse(res.value);
+    currentTxName = parsed.name;
+    draftTxRawRows = null;
+    currentTxMetric = null;
+    document.getElementById('nameInputTx').value = parsed.name;
+    document.getElementById('saveBtnTx').disabled = true;
+    renderTxRows(parsed.rows || [], parsed.name, new Set());
+    await refreshSavedTxList();
+  }catch(e){
+    const errBox = document.getElementById('errorBoxTx');
+    errBox.textContent = 'Lỗi khi tải dữ liệu đã lưu: ' + e.message;
+    errBox.style.display = 'block';
+  }
+}
+
+async function deleteSavedTx(key){
+  if(!confirm('Xóa dữ liệu đã lưu cho Name này?')) return;
+  try{
+    await window.storage.delete(key, false);
+    await refreshSavedTxList();
+  }catch(e){ /* ignore */ }
+}
+
+function clearInputsTx(){
+  document.getElementById('oldInputTx').value = '';
+  document.getElementById('newInputTx').value = '';
+  document.getElementById('errorBoxTx').style.display = 'none';
+}
+
+function loadSampleTx(){
+  document.getElementById('nameInputTx').value = 'Domain ABC - HTTP Transaction';
+  const sampleOld = {
+    "Data": {
+      "labels": ["2026-07-22T00:00:00.0000000Z","2026-07-23T00:00:00.0000000Z","2026-07-24T00:00:00.0000000Z","2026-07-25T00:00:00.0000000Z","2026-07-26T00:00:00.0000000Z"],
+      "items": [
+        {"label":"Blocked","value":[1500.0,1800.0,1650.0,2100.0,1950.0]},
+        {"label":"Reported","value":[0.0,0.0,0.0,0.0,0.0]},
+        {"label":"Legitimate","value":[28000000.0,27500000.0,29000000.0,30100000.0,29800000.0]}
+      ]
+    }
+  };
+  const sampleNew = {
+    "Data": {
+      "labels": ["2026-07-29T00:00:00.0000000Z","2026-07-30T00:00:00.0000000Z","2026-07-31T00:00:00.0000000Z","2026-08-01T00:00:00.0000000Z","2026-08-02T00:00:00.0000000Z","2026-08-03T00:00:00.0000000Z","2026-08-04T00:00:00.0000000Z"],
+      "items": [
+        {"label":"Blocked","value":[172298.0,2739.0,31891.0,2666.0,2270.0,13883.0,2075.0]},
+        {"label":"Reported","value":[0.0,0.0,0.0,0.0,0.0,0.0,0.0]},
+        {"label":"Legitimate","value":[36408684.0,33578971.0,30975742.0,29795972.0,23415091.0,34030926.0,31644329.0]}
+      ]
+    }
+  };
+  document.getElementById('oldInputTx').value = JSON.stringify(sampleOld, null, 2);
+  document.getElementById('newInputTx').value = JSON.stringify(sampleNew, null, 2);
+  convertTx();
+}
+
+function copyCSVTx(){
+  if(!lastTxRows.length) return;
+  const codes = lastTxCodes;
+  let csv = 'Ngay,' + codes.flatMap(c => [`${c} Old`,`${c} New`,`${c} Diff`]).join(',') + '\n';
+  lastTxRows.forEach(r => {
+    const cells = codes.flatMap(code => {
+      const v = r.values[code] || {old:0,new:0};
+      return [v.old, v.new, v.new - v.old];
+    });
+    csv += `${fmtDate(r.date)},${cells.join(',')}\n`;
+  });
+  const totalCells = codes.flatMap(code => {
+    const t = lastTxTotals[code];
+    return [t.old, t.new, t.diff];
+  });
+  csv += `Tong,${totalCells.join(',')}\n`;
+  navigator.clipboard.writeText(csv);
+  flashButton(event.target, 'Đã copy CSV');
+}
+
+function copyMarkdownTx(){
+  if(!lastTxRows.length) return;
+  const codes = lastTxCodes;
+  let md = '| Ngày | ' + codes.flatMap(c => [`${c} Old`,`${c} New`,`${c} Δ`]).join(' | ') + ' |\n';
+  md += '|---|' + codes.map(()=>'---|---|---|').join('') + '\n';
+  lastTxRows.forEach(r => {
+    const cells = codes.flatMap(code => {
+      const v = r.values[code] || {old:0,new:0};
+      const diff = v.new - v.old;
+      return [fmt(v.old), fmt(v.new), fmtSigned(diff)];
+    });
+    md += `| ${fmtDate(r.date)} | ${cells.join(' | ')} |\n`;
+  });
+  const totalCells = codes.flatMap(code => {
+    const t = lastTxTotals[code];
+    return [`**${fmt(t.old)}**`, `**${fmt(t.new)}**`, `**${fmtSigned(t.diff)}**`];
+  });
+  md += `| **Tổng** | ${totalCells.join(' | ')} |\n`;
+  navigator.clipboard.writeText(md);
+  flashButton(event.target, 'Đã copy Markdown');
+}
+</script>
+</body>
+</html>
