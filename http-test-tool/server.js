@@ -2,7 +2,7 @@ const express = require("express");
 const path = require("path");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3090;
 
 app.use(express.json({ limit: "1mb" }));
 app.use(express.static(path.join(__dirname, "public")));
@@ -130,14 +130,60 @@ app.get("/api/inspect", (req, res) => {
   });
 });
 
-app.get("/proxy", (_req, res) => res.sendFile(renderProxyPage()));
-
-app.get("*splat", (req, res, next) => {
-  if (req.path.startsWith("/api/")) return next();
-  if (req.path.includes(".")) return next();
-  res.sendFile(path.join(__dirname, "public", "index.html"));
+app.get("/proxy", (_req, res) => {
+  res.sendFile(path.join(__dirname, "public", "proxy.html"));
 });
 
-app.listen(PORT, () => {
-  console.log(`HTTP Test Tool running on http://localhost:${PORT}`);
+// Explicit page routes. No Express wildcard route is used.
+const pageRoutes = {
+  "/": "index.html",
+  "/request": "request.html",
+  "/request.html": "request.html",
+  "/proxy.html": "proxy.html",
+  "/response": "response.html",
+  "/response.html": "response.html",
+  "/image-1": "image-1.html",
+  "/image-1.html": "image-1.html",
+  "/image-2": "image-2.html",
+  "/image-2.html": "image-2.html",
+  "/image-3": "image-3.html",
+  "/image-3.html": "image-3.html",
+  "/image-4": "image-4.html",
+  "/image-4.html": "image-4.html",
+  "/image-5": "image-5.html",
+  "/image-5.html": "image-5.html"
+};
+
+app.use((req, res, next) => {
+  if (req.method !== "GET") return next();
+  const file = pageRoutes[req.path];
+  if (!file) return next();
+  res.sendFile(path.join(__dirname, "public", file));
+});
+
+const server = app.listen(PORT, "0.0.0.0", () => {
+  console.log("");
+  console.log("==============================================");
+  console.log(" HTTP Test Tool is RUNNING");
+  console.log(` Local:   http://localhost:${PORT}`);
+  console.log(` Network: http://127.0.0.1:${PORT}`);
+  console.log(" Press Ctrl+C to stop");
+  console.log("==============================================");
+  console.log("");
+});
+
+server.on("error", (err) => {
+  console.error("SERVER ERROR:", err);
+});
+
+process.on("uncaughtException", (err) => {
+  console.error("UNCAUGHT EXCEPTION:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("UNHANDLED REJECTION:", reason);
+});
+
+process.on("exit", (code) => {
+  console.log(`Node process is exiting. Exit code: ${code}`);
 });
