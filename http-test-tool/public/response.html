@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Response Test - HTTP Test Tool</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar"><a class="brand" href="/">HTTP TEST TOOL</a><nav><a href="/request.html">Request</a><a href="/proxy.html">Proxy</a><a class="active" href="/response.html">Response</a></nav></header>
+<main class="container">
+  <div class="page-head"><div><div class="eyebrow">RESPONSE</div><h1>Controlled response endpoint</h1><p>Change status, delay, cache behavior and response size.</p></div></div>
+  <section class="panel">
+    <div class="controls">
+      <label>Status<input id="statusInput" type="number" value="200"></label>
+      <label>Delay ms<input id="delayInput" type="number" value="0" min="0" max="10000"></label>
+      <label>Size KB<input id="sizeInput" type="number" value="1" min="0" max="10240"></label>
+      <label>Cache<select id="cacheInput"><option>no-store</option><option>public, max-age=60</option><option>public, max-age=300</option></select></label>
+    </div>
+    <div class="actions"><a id="open" class="button primary" target="_blank">Open Response</a><button id="copy" class="button">Copy URL</button></div>
+    <pre id="urlPreview" class="url-preview"></pre>
+  </section>
+  <section class="panel">
+    <h3>Example</h3>
+    <p>Try status <b>404</b>, delay <b>1000</b>, or size <b>100</b> KB.</p>
+  </section>
+</main>
+<script>
+function buildUrl() {
+  const p = new URLSearchParams({
+    status: statusInput.value, delay: delayInput.value, sizeKb: sizeInput.value, cache: cacheInput.value
+  });
+  return `${location.origin}/api/test-response?${p}`;
+}
+function refresh() { const u = buildUrl(); open.href = u; urlPreview.textContent = u; }
+document.querySelectorAll("input, select").forEach(x => x.addEventListener("input", refresh));
+copy.onclick = async () => { await navigator.clipboard.writeText(buildUrl()); copy.textContent = "Copied"; setTimeout(() => copy.textContent = "Copy URL", 1200); };
+refresh();
+</script>
+</body>
+</html>

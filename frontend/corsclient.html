@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS Testing Lab (Dynamic Domain)</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f6f8; color: #333; }
+        .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        .config-box { background: #eef2f7; border-left: 4px solid #007bff; }
+        label { font-weight: bold; display: block; margin-bottom: 8px; }
+        input[type="text"] { width: 100%; max-width: 500px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; font-size: 14px; }
+        button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 10px; margin-top: 10px; }
+        .btn-simple { background-color: #28a745; color: white; }
+        .btn-preflight { background-color: #007bff; color: white; }
+        pre { background: #272822; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+        .info { color: #555; font-size: 0.9em; margin-bottom: 10px; }
+        .note { font-size: 0.85em; color: #d9534f; margin-top: 5px; }
+    </style>
+</head>
+<body>
+
+    <h1>🧪 CORS Testing Lab</h1>
+    <p>Origin Hiện Tại (Frontend): <b id="current-origin">...</b></p>
+
+    <!-- CẤU HÌNH DOMAIN DYNAMIC -->
+    <div class="card config-box">
+        <label for="backend-url">⚙️ Nhập Target Backend Domain/URL:</label>
+        <input type="text" id="backend-url" placeholder="https://api.domaincuaban.com hoặc http://localhost:5000">
+        <div class="note">⚠️ Nguyên tắc: Không bao gồm dấu <code>/</code> ở cuối URL.</div>
+    </div>
+
+    <!-- TEST SIMPLE REQUEST -->
+    <div class="card">
+        <h2>1. Test Simple Request</h2>
+        <p class="info">Gửi HTTP <code>GET</code> request. Trình duyệt sẽ gửi trực tiếp mà KHÔNG tạo Preflight <code>OPTIONS</code> request.</p>
+        <button class="btn-simple" onclick="testSimpleRequest()">Gửi Simple Request (GET)</button>
+    </div>
+
+    <!-- TEST PREFLIGHT REQUEST -->
+    <div class="card">
+        <h2>2. Test Preflight Request</h2>
+        <p class="info">Gửi HTTP <code>POST</code> kèm <code>Content-Type: application/json</code> và Custom Header. Trình duyệt sẽ tự động bắn <code>OPTIONS</code> trước.</p>
+        <button class="btn-preflight" onclick="testPreflightRequest()">Gửi Preflight Request (POST)</button>
+    </div>
+
+    <!-- HIỂN THỊ KẾT QUẢ -->
+    <div class="card">
+        <h3>Kết quả Response / Log:</h3>
+        <pre id="output">// Bấm các nút ở trên để bắt đầu test...</pre>
+    </div>
+
+    <script>
+        // Hiển thị Origin hiện tại của Frontend
+        document.getElementById('current-origin').textContent = window.location.origin;
+
+        const backendInput = document.getElementById('backend-url');
+        const output = document.getElementById('output');
+
+        // Tự động load lại Backend Domain đã lưu trước đó trong localStorage (nếu có)
+        const savedDomain = localStorage.getItem('cors_backend_domain');
+        if (savedDomain) {
+            backendInput.value = savedDomain;
+        } else {
+            backendInput.value = 'http://localhost:5000'; // Mặc định
+        }
+
+        // Hàm lấy và chuẩn hóa URL Backend từ ô Input
+        function getBackendUrl() {
+            let url = backendInput.value.trim();
+            if (!url) {
+                alert('Vui lòng nhập Backend Domain!');
+                return null;
+            }
+            // Tự động xóa dấu / ở cuối nếu người dùng lỡ gõ vào
+            if (url.endsWith('/')) {
+                url = url.slice(0, -1);
+                backendInput.value = url;
+            }
+            // Lưu lại vào localStorage
+            localStorage.setItem('cors_backend_domain', url);
+            return url;
+        }
+
+        // 1. Function Test Simple Request
+        async function testSimpleRequest() {
+            const apiBase = getBackendUrl();
+            if (!apiBase) return;
+
+            output.textContent = `[${new Date().toLocaleTimeString()}] Đang gửi GET tới: ${apiBase}/api/simple ...`;
+            
+            try {
+                const response = await fetch(`${apiBase}/api/simple`, { 
+                    method: 'GET' 
+                });
+                const data = await response.json();
+                output.textContent = `STATUS: ${response.status} OK\n\n` + JSON.stringify(data, null, 2);
+            } catch (err) {
+                output.textContent = `❌ LỖI CORS / NETWORK ERROR:\n${err.message}\n\nHãy kiểm tra tab Console và Network trong F12 Developer Tools để xem chi tiết.`;
+            }
+        }
+
+        // 2. Function Test Preflight Request
+        async function testPreflightRequest() {
+            const apiBase = getBackendUrl();
+            if (!apiBase) return;
+
+            output.textContent = `[${new Date().toLocaleTimeString()}] Đang gửi POST tới: ${apiBase}/api/preflight ...\n(Kiểm tra tab Network xem OPTIONS request)`;
+            
+            try {
+                const response = await fetch(`${apiBase}/api/preflight`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Custom-Header': 'DynamicDomainTest'
+                    },
+                    body: JSON.stringify({ 
+                        clientOrigin: window.location.origin,
+                        timestamp: new Date().toISOString()
+                    })
+                });
+                const data = await response.json();
+                output.textContent = `STATUS: ${response.status} OK\n\n` + JSON.stringify(data, null, 2);
+            } catch (err) {
+                output.textContent = `❌ LỖI CORS / NETWORK ERROR:\n${err.message}\n\nHãy kiểm tra tab Console và Network trong F12 Developer Tools để xem chi tiết.`;
+            }
+        }
+    </script>
+</body>
+</html>

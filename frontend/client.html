@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CORS Testing Lab</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; background-color: #f4f6f8; }
+        .card { background: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); margin-bottom: 20px; }
+        button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; margin-right: 10px; }
+        .btn-simple { background-color: #28a745; color: white; }
+        .btn-preflight { background-color: #007bff; color: white; }
+        pre { background: #272822; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; }
+        .info { color: #555; font-size: 0.9em; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+    <h1>🧪 CORS Testing Lab (Origin: http://localhost:3000)</h1>
+    <p>Hãy mở <b>F12 (Developer Tools) -> Tab Network</b> để quan sát các HTTP Request.</p>
+
+    <div class="card">
+        <h2>1. Test Simple Request</h2>
+        <p class="info">Gửi HTTP <code>GET</code> request không chứa custom header. Trình duyệt gửi trực tiếp mà KHÔNG qua OPTIONS.</p>
+        <button class="btn-simple" onclick="testSimpleRequest()">Gửi Simple Request (GET)</button>
+    </div>
+
+    <div class="card">
+        <h2>2. Test Preflight Request</h2>
+        <p class="info">Gửi HTTP <code>POST</code> kèm <code>Content-Type: application/json</code> và Custom Header. Trình duyệt sẽ tự động bắn <code>OPTIONS</code> trước.</p>
+        <button class="btn-preflight" onclick="testPreflightRequest()">Gửi Preflight Request (POST + Custom Header)</button>
+    </div>
+
+    <div class="card">
+        <h3>Kết quả Response:</h3>
+        <pre id="output">// Bấm nút phía trên để xem kết quả...</pre>
+    </div>
+
+    <script>
+        const API_BASE = 'http://pagerule.lientestsit.onl.ac';
+        const output = document.getElementById('output');
+
+        async function testSimpleRequest() {
+            output.textContent = "Đang gửi Simple Request...";
+            try {
+                const response = await fetch(`${API_BASE}/api/simple`, { method: 'GET' });
+                const data = await response.json();
+                output.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                output.textContent = "Lỗi CORS/Network: " + err.message;
+            }
+        }
+
+        async function testPreflightRequest() {
+            output.textContent = "Đang gửi Preflight Request (Kiểm tra tab Network xem OPTIONS request)...";
+            try {
+                const response = await fetch(`${API_BASE}/api/preflight`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Custom-Header': 'HelloFromFrontend'
+                    },
+                    body: JSON.stringify({ name: "Nginx Expert", role: "DevOps" })
+                });
+                const data = await response.json();
+                output.textContent = JSON.stringify(data, null, 2);
+            } catch (err) {
+                output.textContent = "Lỗi CORS/Network: " + err.message;
+            }
+        }
+    </script>
+</body>
+</html>

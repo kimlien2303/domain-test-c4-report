@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Proxy - HTTP Test Tool</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar"><a class="brand" href="/">HTTP TEST TOOL</a><nav><a href="/request.html">Request</a><a class="active" href="/proxy.html">Proxy</a><a href="/response.html">Response</a></nav></header>
+<main class="container">
+  <div class="page-head"><div><div class="eyebrow">PROXY</div><h1>Inspect proxy response</h1><p>This page requests a target through the server-side proxy.</p></div></div>
+  <section class="panel">
+    <div class="form-row"><input id="url" type="url" placeholder="https://example.com" value="https://example.com"><button id="send" class="button primary">Proxy Request</button></div>
+    <div id="error" class="error hidden"></div>
+  </section>
+  <section id="result" class="result hidden">
+    <div class="stats">
+      <div><small>Status</small><strong id="status">-</strong></div>
+      <div><small>Time</small><strong id="time">-</strong></div>
+      <div><small>Final URL</small><strong id="finalUrl">-</strong></div>
+    </div>
+    <div class="two-col">
+      <div class="panel"><h3>Proxy Response Headers</h3><pre id="headers"></pre></div>
+      <div class="panel"><h3>Proxy Response Body</h3><pre id="body"></pre></div>
+    </div>
+  </section>
+</main>
+<script src="/js/app.js"></script>
+<script>
+document.getElementById("send").onclick = async () => {
+  const btn = document.getElementById("send"), error = document.getElementById("error");
+  error.classList.add("hidden"); btn.disabled = true; btn.textContent = "Proxying...";
+  try {
+    const data = await sendRequest(document.getElementById("url").value.trim(), "GET");
+    if (data.error) throw new Error(data.error);
+    status.textContent = `${data.response.status} ${data.response.statusText}`;
+    time.textContent = `${data.response.timeMs} ms`;
+    finalUrl.textContent = data.response.url;
+    headers.textContent = formatHeaders(data.response.headers);
+    body.textContent = prettyBody(data.response.body);
+    result.classList.remove("hidden");
+  } catch (e) { error.textContent = e.message; error.classList.remove("hidden"); }
+  finally { btn.disabled = false; btn.textContent = "Proxy Request"; }
+};
+</script>
+</body>
+</html>

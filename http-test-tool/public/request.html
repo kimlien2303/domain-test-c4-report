@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request - HTTP Test Tool</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+<header class="topbar"><a class="brand" href="/">HTTP TEST TOOL</a><nav><a class="active" href="/request.html">Request</a><a href="/proxy.html">Proxy</a><a href="/response.html">Response</a></nav></header>
+<main class="container">
+  <div class="page-head"><div><div class="eyebrow">REQUEST</div><h1>Send an HTTP request</h1></div></div>
+  <section class="panel">
+    <div class="form-row">
+      <select id="method"><option>GET</option><option>HEAD</option></select>
+      <input id="url" type="url" placeholder="https://example.com" value="https://example.com">
+      <button id="send" class="button primary">Send Request</button>
+    </div>
+    <div id="requestError" class="error hidden"></div>
+  </section>
+  <section id="result" class="result hidden">
+    <div class="stats">
+      <div><small>Status</small><strong id="status">-</strong></div>
+      <div><small>Time</small><strong id="time">-</strong></div>
+      <div><small>Final URL</small><strong id="finalUrl">-</strong></div>
+    </div>
+    <div class="two-col">
+      <div class="panel"><h3>Response Headers</h3><pre id="headers"></pre></div>
+      <div class="panel"><h3>Response Body</h3><pre id="body"></pre></div>
+    </div>
+  </section>
+</main>
+<script src="/js/app.js"></script>
+<script>
+document.getElementById("send").onclick = async () => {
+  const btn = document.getElementById("send");
+  const error = document.getElementById("requestError");
+  const result = document.getElementById("result");
+  error.classList.add("hidden");
+  btn.disabled = true;
+  btn.textContent = "Sending...";
+  try {
+    const data = await sendRequest(
+      document.getElementById("url").value.trim(),
+      document.getElementById("method").value
+    );
+    if (data.error) throw new Error(data.error);
+    document.getElementById("status").textContent = `${data.response.status} ${data.response.statusText}`;
+    document.getElementById("time").textContent = `${data.response.timeMs} ms`;
+    document.getElementById("finalUrl").textContent = data.response.url;
+    document.getElementById("headers").textContent = formatHeaders(data.response.headers);
+    document.getElementById("body").textContent = prettyBody(data.response.body);
+    result.classList.remove("hidden");
+  } catch (e) {
+    error.textContent = e.message;
+    error.classList.remove("hidden");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Send Request";
+  }
+};
+</script>
+</body>
+</html>
