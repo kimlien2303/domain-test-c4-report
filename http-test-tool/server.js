@@ -131,7 +131,7 @@ app.get("/api/inspect", (req, res) => {
 });
 
 app.get("/proxy", (_req, res) => {
-  res.sendFile(path.join(__dirname, "public", "proxy.html"));
+  res.sendFile(path.join(__dirname,"/domain-test-c4-report/http-test-tool/", "public", "proxy.html"));
 });
 
 // Explicit page routes. No Express wildcard route is used.
@@ -158,7 +158,7 @@ app.use((req, res, next) => {
   if (req.method !== "GET") return next();
   const file = pageRoutes[req.path];
   if (!file) return next();
-  res.sendFile(path.join(__dirname, "public", file));
+  res.sendFile(path.join(__dirname, "/domain-test-c4-report/http-test-tool/", "public", file));
 });
 
 const server = app.listen(PORT, "0.0.0.0", () => {
